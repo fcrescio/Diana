@@ -1,0 +1,45 @@
+buildscript {
+    ext {
+        compose_ui_version = '1.6.7'
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+        classpath 'com.google.gms:google-services:4.4.1'
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:2.9.9'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+ext.readConf = { key ->
+    if (project.hasProperty(key)) {
+        return project.property(key)
+    }
+    def env = System.getenv(key)
+    if (env != null) {
+        return env
+    }
+    def localPropFile = rootProject.file("local.properties")
+    if (localPropFile.exists()) {
+        def props = new Properties()
+        props.load(localPropFile.newDataInputStream())
+        if (props[key] != null) {
+            return props[key]
+        }
+    }
+    return ""
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
