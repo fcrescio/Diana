@@ -1,0 +1,11 @@
+{
+  "recordings": [
+    {
+      "file": "sample1.m4a",
+      "transcript": "Buy milk tomorrow",
+      "notes": [
+        { "type": "todo", "text": "Buy milk" }
+      ]
+    }
+  ]
+}
