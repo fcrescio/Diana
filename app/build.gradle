@@ -26,7 +26,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion compose_ui_version
+        kotlinCompilerExtensionVersion '1.5.10'
     }
 
     packagingOptions {
