@@ -1,12 +1,13 @@
 {
   "project_info": {
-    "project_number": "1234567890",
-    "project_id": "diana-demo"
+    "project_number": "560936573912",
+    "project_id": "immaginai",
+    "storage_bucket": "immaginai.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1234567890:android:abcdef",
+        "mobilesdk_app_id": "1:560936573912:android:02d68fbd845758b22870ad",
         "android_client_info": {
           "package_name": "li.crescio.penates.diana"
         }
@@ -14,9 +15,14 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDUMMYKEY"
+          "current_key": "AIzaSyBnIkhfDQj_voCBNlAR3-kxRAYc3x1nykg"
         }
-      ]
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
     }
   ],
   "configuration_version": "1"
