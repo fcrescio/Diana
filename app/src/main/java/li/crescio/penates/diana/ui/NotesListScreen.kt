@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import li.crescio.penates.diana.R
 @Composable
 fun NotesListScreen(
     todo: String,
@@ -29,11 +31,11 @@ fun NotesListScreen(
                 .padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            Button(onClick = onRecord) { Text("Record") }
+            Button(onClick = onRecord) { Text(stringResource(R.string.record)) }
             Spacer(modifier = Modifier.width(16.dp))
-            Button(onClick = onAddMemo) { Text("Text Memo") }
+            Button(onClick = onAddMemo) { Text(stringResource(R.string.text_memo)) }
             Spacer(modifier = Modifier.width(16.dp))
-            Button(onClick = onViewRecordings) { Text("View Recordings") }
+            Button(onClick = onViewRecordings) { Text(stringResource(R.string.view_recordings)) }
         }
 
         LazyColumn(
@@ -42,15 +44,15 @@ fun NotesListScreen(
                 .padding(horizontal = 16.dp)
         ) {
             item {
-                Text("To-Do List")
+                Text(stringResource(R.string.todo_list))
                 Text(todo, modifier = Modifier.padding(bottom = 16.dp))
             }
             item {
-                Text("Appointments")
+                Text(stringResource(R.string.appointments))
                 Text(appointments, modifier = Modifier.padding(bottom = 16.dp))
             }
             item {
-                Text("Thoughts & Notes")
+                Text(stringResource(R.string.thoughts_notes))
                 Text(thoughts)
             }
         }

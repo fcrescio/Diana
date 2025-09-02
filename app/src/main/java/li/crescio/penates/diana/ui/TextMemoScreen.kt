@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import li.crescio.penates.diana.R
 
 @Composable
 fun TextMemoScreen(onSave: (String) -> Unit) {
@@ -23,7 +25,7 @@ fun TextMemoScreen(onSave: (String) -> Unit) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = { if (text.isNotBlank()) onSave(text) }, modifier = Modifier.align(Alignment.End)) {
-            Text("Save")
+            Text(stringResource(R.string.save))
         }
     }
 }

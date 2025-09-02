@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Diana</string>
+    <string name="record">Registra</string>
+    <string name="text_memo">Nota di testo</string>
+    <string name="view_recordings">Vedi registrazioni</string>
+    <string name="todo_list">Lista di cose da fare</string>
+    <string name="appointments">Appuntamenti</string>
+    <string name="thoughts_notes">Pensieri e note</string>
+    <string name="back">Indietro</string>
+    <string name="play">Riproduci</string>
+    <string name="settings">Impostazioni</string>
+    <string name="finish_recording">Termina registrazione</string>
+    <string name="save">Salva</string>
+    <string name="processing">Elaborazione...</string>
+    <string name="log_recorded_memo">Memo registrato</string>
+    <string name="log_added_memo">Memo aggiunto</string>
+</resources>

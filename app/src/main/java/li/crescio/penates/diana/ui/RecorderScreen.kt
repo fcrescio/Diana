@@ -17,12 +17,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import li.crescio.penates.diana.BuildConfig
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.recorder.AndroidRecorder
 import li.crescio.penates.diana.transcriber.GroqTranscriber
+import li.crescio.penates.diana.R
 
 @Composable
 fun RecorderScreen(logs: List<String>, onFinish: (Memo) -> Unit) {
@@ -73,7 +75,7 @@ fun RecorderScreen(logs: List<String>, onFinish: (Memo) -> Unit) {
                     }
                 },
                 enabled = isRecording
-            ) { Text("Finish Recording") }
+            ) { Text(stringResource(R.string.finish_recording)) }
         }
 
         Box(
