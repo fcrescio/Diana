@@ -5,19 +5,39 @@ import li.crescio.penates.diana.notes.Transcript
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import org.json.JSONObject
+import java.io.File
+import java.io.IOException
 
 class GroqTranscriber(private val apiKey: String) : Transcriber {
     private val client = OkHttpClient()
 
     override suspend fun transcribe(recording: RawRecording): Transcript {
-        // Simplified network request placeholder
+        val audioFile = File(recording.filePath)
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                "file",
+                audioFile.name,
+                audioFile.asRequestBody("audio/m4a".toMediaType())
+            )
+            // Groq's API is compatible with OpenAI's Whisper model names.
+            .addFormDataPart("model", "whisper-large-v3")
+            .build()
+
         val request = Request.Builder()
             .url("https://api.groq.com/openai/v1/audio/transcriptions")
             .header("Authorization", "Bearer $apiKey")
-            .post("".toRequestBody("application/octet-stream".toMediaType()))
+            .post(body)
             .build()
-        client.newCall(request).execute().use { }
-        return Transcript("")
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Unexpected code $response")
+            val json = JSONObject(response.body?.string().orEmpty())
+            val text = json.optString("text", "")
+            return Transcript(text)
+        }
     }
 }
