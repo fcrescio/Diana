@@ -1,6 +1,8 @@
 package li.crescio.penates.diana.llm
 
 import li.crescio.penates.diana.notes.Memo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -53,7 +55,9 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger) {
             .header("Authorization", "Bearer $apiKey")
             .post(requestBody)
             .build()
-        val responseText = client.newCall(request).execute().use { it.body?.string().orEmpty() }
+        val responseText = withContext(Dispatchers.IO) {
+            client.newCall(request).execute().use { it.body?.string().orEmpty() }
+        }
         logger.log(json, responseText)
 
         val content = JSONObject(responseText)
