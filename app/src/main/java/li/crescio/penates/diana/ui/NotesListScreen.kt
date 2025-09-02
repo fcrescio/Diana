@@ -19,7 +19,8 @@ fun NotesListScreen(
     notes: List<StructuredNote>,
     logs: List<String>,
     onRecord: () -> Unit,
-    onViewRecordings: () -> Unit
+    onViewRecordings: () -> Unit,
+    onAddMemo: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -29,6 +30,8 @@ fun NotesListScreen(
             horizontalArrangement = Arrangement.Center
         ) {
             Button(onClick = onRecord) { Text("Record") }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(onClick = onAddMemo) { Text("Text Memo") }
             Spacer(modifier = Modifier.width(16.dp))
             Button(onClick = onViewRecordings) { Text("View Recordings") }
         }

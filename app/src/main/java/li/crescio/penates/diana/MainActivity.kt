@@ -27,13 +27,24 @@ fun DianaApp() {
     val player: Player = remember { AndroidPlayer() }
 
     when (screen) {
-        Screen.List -> NotesListScreen(notes, logs, onRecord = { screen = Screen.Recorder }) { screen = Screen.Recordings }
+        Screen.List -> NotesListScreen(
+            notes,
+            logs,
+            onRecord = { screen = Screen.Recorder },
+            onViewRecordings = { screen = Screen.Recordings },
+            onAddMemo = { screen = Screen.TextMemo }
+        )
         Screen.Recordings -> RecordedNotesScreen(recordedNotes, player) { screen = Screen.List }
         Screen.Recorder -> RecorderScreen(logs) { note ->
             recordedNotes.add(note)
             logs.add("Recorded note")
             screen = Screen.Recordings
         }
+        Screen.TextMemo -> TextMemoScreen(onSave = { text ->
+            notes.add(StructuredNote.Memo(text))
+            logs.add("Added memo")
+            screen = Screen.List
+        })
         Screen.Processing -> ProcessingScreen("Processing...") { screen = Screen.List }
         Screen.Settings -> SettingsScreen()
     }
@@ -43,6 +54,7 @@ sealed class Screen {
     data object List : Screen()
     data object Recordings : Screen()
     data object Recorder : Screen()
+    data object TextMemo : Screen()
     data object Processing : Screen()
     data object Settings : Screen()
 }
