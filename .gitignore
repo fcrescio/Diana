@@ -1,0 +1,6 @@
+/build/
+app/build/
+/.gradle/
+local.properties
+android-sdk/
+commandlinetools.zip

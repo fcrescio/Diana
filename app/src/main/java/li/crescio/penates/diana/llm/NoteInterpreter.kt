@@ -11,8 +11,8 @@ class NoteInterpreter(private val apiKey: String, private val logger: LlmLogger)
     private val client = OkHttpClient()
 
     suspend fun interpret(transcript: Transcript): List<StructuredNote> {
-        val requestBody = "{""input"": ""${transcript.text}""}""
-            .toRequestBody("application/json".toMediaType())
+        val json = """{"input": "${transcript.text}"}"""
+        val requestBody = json.toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url("https://openrouter.ai/api/v1/chat/completions")
             .header("Authorization", "Bearer $apiKey")
