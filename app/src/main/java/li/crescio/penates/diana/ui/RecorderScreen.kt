@@ -12,9 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import li.crescio.penates.diana.notes.RecordedNote
+import li.crescio.penates.diana.notes.RawRecording
+import li.crescio.penates.diana.notes.Transcript
 
 @Composable
-fun RecorderScreen(logs: List<String>, onFinish: () -> Unit) {
+fun RecorderScreen(logs: List<String>, onFinish: (RecordedNote) -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -22,7 +25,12 @@ fun RecorderScreen(logs: List<String>, onFinish: () -> Unit) {
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Button(onClick = onFinish) { Text("Finish Recording") }
+            Button(onClick = {
+                // Stub recording and transcription
+                val recording = RawRecording("sample.wav")
+                val transcript = Transcript("Sample transcription")
+                onFinish(RecordedNote(recording, transcript))
+            }) { Text("Finish Recording") }
         }
 
         Box(
