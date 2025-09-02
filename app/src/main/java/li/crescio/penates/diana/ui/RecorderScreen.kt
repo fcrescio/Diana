@@ -1,5 +1,9 @@
 package li.crescio.penates.diana.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import li.crescio.penates.diana.BuildConfig
 import li.crescio.penates.diana.notes.RecordedNote
@@ -27,7 +32,30 @@ fun RecorderScreen(logs: List<String>, onFinish: (RecordedNote) -> Unit) {
     val recorder = remember { AndroidRecorder(context) }
     val transcriber = remember { GroqTranscriber(BuildConfig.GROQ_API_KEY) }
 
-    LaunchedEffect(Unit) { recorder.start() }
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var isRecording by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasPermission = granted
+    }
+
+    LaunchedEffect(hasPermission) {
+        if (hasPermission && !isRecording) {
+            recorder.start()
+            isRecording = true
+        } else if (!hasPermission) {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -36,13 +64,16 @@ fun RecorderScreen(logs: List<String>, onFinish: (RecordedNote) -> Unit) {
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Button(onClick = {
-                scope.launch {
-                    val recording = recorder.stop()
-                    val transcript = transcriber.transcribe(recording)
-                    onFinish(RecordedNote(recording, transcript))
-                }
-            }) { Text("Finish Recording") }
+            Button(
+                onClick = {
+                    scope.launch {
+                        val recording = recorder.stop()
+                        val transcript = transcriber.transcribe(recording)
+                        onFinish(RecordedNote(recording, transcript))
+                    }
+                },
+                enabled = isRecording
+            ) { Text("Finish Recording") }
         }
 
         Box(
