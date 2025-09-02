@@ -3,7 +3,6 @@ package li.crescio.penates.diana.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,11 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import li.crescio.penates.diana.notes.StructuredNote
-
 @Composable
 fun NotesListScreen(
-    notes: List<StructuredNote>,
+    todo: String,
+    appointments: String,
+    thoughts: String,
     logs: List<String>,
     onRecord: () -> Unit,
     onViewRecordings: () -> Unit,
@@ -41,8 +40,17 @@ fun NotesListScreen(
                 .weight(1f)
                 .padding(horizontal = 16.dp)
         ) {
-            items(notes) { note ->
-                Text(note.toString())
+            item {
+                Text("To-Do List")
+                Text(todo, modifier = Modifier.padding(bottom = 16.dp))
+            }
+            item {
+                Text("Appointments")
+                Text(appointments, modifier = Modifier.padding(bottom = 16.dp))
+            }
+            item {
+                Text("Thoughts & Notes")
+                Text(thoughts)
             }
         }
 
