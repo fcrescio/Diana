@@ -9,12 +9,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import li.crescio.penates.diana.notes.RecordedNote
+import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.player.Player
 
 @Composable
-fun RecordedNotesScreen(
-    notes: List<RecordedNote>,
+fun RecordedMemosScreen(
+    memos: List<Memo>,
     player: Player,
     onBack: () -> Unit
 ) {
@@ -29,14 +29,14 @@ fun RecordedNotesScreen(
         }
 
         LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            items(notes) { note ->
+            items(memos) { memo ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                 ) {
-                    Button(onClick = { player.play(note.recording.filePath) }) { Text("Play") }
+                    Button(onClick = { memo.audioPath?.let { player.play(it) } }) { Text("Play") }
                     Text(
-                        note.transcript.text,
+                        memo.text,
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }

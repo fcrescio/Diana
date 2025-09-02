@@ -4,12 +4,11 @@ data class RawRecording(val filePath: String)
 
 data class Transcript(val text: String)
 
-/**
- * A captured audio note and its raw transcript prior to any processing.
- */
-data class RecordedNote(
-    val recording: RawRecording,
-    val transcript: Transcript
+/** A memo consists of the written text and, optionally, the path to the
+ * original audio that produced it. */
+data class Memo(
+    val text: String,
+    val audioPath: String? = null
 )
 
 sealed class StructuredNote {

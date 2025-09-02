@@ -20,12 +20,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import li.crescio.penates.diana.BuildConfig
-import li.crescio.penates.diana.notes.RecordedNote
+import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.recorder.AndroidRecorder
 import li.crescio.penates.diana.transcriber.GroqTranscriber
 
 @Composable
-fun RecorderScreen(logs: List<String>, onFinish: (RecordedNote) -> Unit) {
+fun RecorderScreen(logs: List<String>, onFinish: (Memo) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -69,7 +69,7 @@ fun RecorderScreen(logs: List<String>, onFinish: (RecordedNote) -> Unit) {
                     scope.launch {
                         val recording = recorder.stop()
                         val transcript = transcriber.transcribe(recording)
-                        onFinish(RecordedNote(recording, transcript))
+                        onFinish(Memo(transcript.text, recording.filePath))
                     }
                 },
                 enabled = isRecording

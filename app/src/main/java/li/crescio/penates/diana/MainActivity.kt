@@ -4,8 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
-import li.crescio.penates.diana.notes.RecordedNote
-import li.crescio.penates.diana.notes.StructuredNote
+import kotlinx.coroutines.launch
+import li.crescio.penates.diana.llm.LlmLogger
+import li.crescio.penates.diana.llm.MemoProcessor
+import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.player.AndroidPlayer
 import li.crescio.penates.diana.player.Player
 import li.crescio.penates.diana.ui.*
@@ -21,28 +23,45 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun DianaApp() {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
-    val notes = remember { mutableStateListOf<StructuredNote>() }
-    val recordedNotes = remember { mutableStateListOf<RecordedNote>() }
+    val recordedMemos = remember { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
+    var todo by remember { mutableStateOf("") }
+    var appointments by remember { mutableStateOf("") }
+    var thoughts by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val processor = remember { MemoProcessor(BuildConfig.OPENROUTER_API_KEY, LlmLogger()) }
     val player: Player = remember { AndroidPlayer() }
+
+    fun processMemo(memo: Memo) {
+        scope.launch {
+            val summary = processor.process(memo)
+            todo = summary.todo
+            appointments = summary.appointments
+            thoughts = summary.thoughts
+        }
+    }
 
     when (screen) {
         Screen.List -> NotesListScreen(
-            notes,
+            todo,
+            appointments,
+            thoughts,
             logs,
             onRecord = { screen = Screen.Recorder },
             onViewRecordings = { screen = Screen.Recordings },
             onAddMemo = { screen = Screen.TextMemo }
         )
-        Screen.Recordings -> RecordedNotesScreen(recordedNotes, player) { screen = Screen.List }
-        Screen.Recorder -> RecorderScreen(logs) { note ->
-            recordedNotes.add(note)
-            logs.add("Recorded note")
-            screen = Screen.Recordings
+        Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
+        Screen.Recorder -> RecorderScreen(logs) { memo ->
+            recordedMemos.add(memo)
+            logs.add("Recorded memo")
+            processMemo(memo)
+            screen = Screen.List
         }
         Screen.TextMemo -> TextMemoScreen(onSave = { text ->
-            notes.add(StructuredNote.Memo(text))
+            val memo = Memo(text)
             logs.add("Added memo")
+            processMemo(memo)
             screen = Screen.List
         })
         Screen.Processing -> ProcessingScreen("Processing...") { screen = Screen.List }
