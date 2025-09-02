@@ -19,11 +19,14 @@ class MainActivity : ComponentActivity() {
 fun DianaApp() {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val notes = remember { mutableStateListOf<StructuredNote>() }
+    val logs = remember { mutableStateListOf<String>() }
 
     when (screen) {
-        Screen.List -> NotesListScreen(notes) { screen = Screen.Recorder }
+        Screen.List -> NotesListScreen(notes, logs) { screen = Screen.Recorder }
         Screen.Recorder -> RecorderScreen {
-            notes.add(StructuredNote.Memo("Sample")); screen = Screen.List
+            notes.add(StructuredNote.Memo("Sample"))
+            logs.add("Recorded memo")
+            screen = Screen.List
         }
         Screen.Processing -> ProcessingScreen("Processing...") { screen = Screen.List }
         Screen.Settings -> SettingsScreen()
