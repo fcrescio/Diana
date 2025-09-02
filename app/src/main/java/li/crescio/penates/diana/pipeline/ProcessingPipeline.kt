@@ -11,14 +11,31 @@ data class PipelineContext(
 )
 
 interface PipelineStep {
+    /**
+     * Whether this step should run given the current [PipelineContext].
+     * The default implementation always executes the step.
+     */
+    suspend fun shouldProcess(context: PipelineContext): Boolean = true
+
+    /**
+     * Perform the work of this step and return the updated [PipelineContext].
+     */
     suspend fun process(context: PipelineContext): PipelineContext
 }
 
 class ProcessingPipeline(private val steps: List<PipelineStep>) {
-    suspend fun execute(recording: RawRecording) {
+    /**
+     * Run the configured pipeline for a [recording], returning the final context.
+     *
+     * Each step may choose not to run by returning `false` from [PipelineStep.shouldProcess].
+     */
+    suspend fun execute(recording: RawRecording): PipelineContext {
         var ctx = PipelineContext(recording)
         steps.forEach { step ->
-            ctx = step.process(ctx)
+            if (step.shouldProcess(ctx)) {
+                ctx = step.process(ctx)
+            }
         }
+        return ctx
     }
 }
