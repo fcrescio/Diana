@@ -2,6 +2,8 @@ package li.crescio.penates.diana.transcriber
 
 import li.crescio.penates.diana.notes.RawRecording
 import li.crescio.penates.diana.notes.Transcript
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -14,30 +16,31 @@ import java.io.IOException
 class GroqTranscriber(private val apiKey: String) : Transcriber {
     private val client = OkHttpClient()
 
-    override suspend fun transcribe(recording: RawRecording): Transcript {
-        val audioFile = File(recording.filePath)
-        val body = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart(
-                "file",
-                audioFile.name,
-                audioFile.asRequestBody("audio/m4a".toMediaType())
-            )
-            // Groq's API is compatible with OpenAI's Whisper model names.
-            .addFormDataPart("model", "whisper-large-v3")
-            .build()
+    override suspend fun transcribe(recording: RawRecording): Transcript =
+        withContext(Dispatchers.IO) {
+            val audioFile = File(recording.filePath)
+            val body = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "file",
+                    audioFile.name,
+                    audioFile.asRequestBody("audio/m4a".toMediaType())
+                )
+                // Groq's API is compatible with OpenAI's Whisper model names.
+                .addFormDataPart("model", "whisper-large-v3")
+                .build()
 
-        val request = Request.Builder()
-            .url("https://api.groq.com/openai/v1/audio/transcriptions")
-            .header("Authorization", "Bearer $apiKey")
-            .post(body)
-            .build()
+            val request = Request.Builder()
+                .url("https://api.groq.com/openai/v1/audio/transcriptions")
+                .header("Authorization", "Bearer $apiKey")
+                .post(body)
+                .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Unexpected code $response")
-            val json = JSONObject(response.body?.string().orEmpty())
-            val text = json.optString("text", "")
-            return Transcript(text)
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Unexpected code $response")
+                val json = JSONObject(response.body?.string().orEmpty())
+                val text = json.optString("text", "")
+                Transcript(text)
+            }
         }
-    }
 }
