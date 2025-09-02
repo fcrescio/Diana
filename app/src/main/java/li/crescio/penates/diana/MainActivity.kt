@@ -23,7 +23,7 @@ fun DianaApp() {
 
     when (screen) {
         Screen.List -> NotesListScreen(notes, logs) { screen = Screen.Recorder }
-        Screen.Recorder -> RecorderScreen {
+        Screen.Recorder -> RecorderScreen(logs) {
             notes.add(StructuredNote.Memo("Sample"))
             logs.add("Recorded memo")
             screen = Screen.List
