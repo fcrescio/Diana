@@ -18,16 +18,19 @@ import li.crescio.penates.diana.notes.StructuredNote
 fun NotesListScreen(
     notes: List<StructuredNote>,
     logs: List<String>,
-    onRecord: () -> Unit
+    onRecord: () -> Unit,
+    onViewRecordings: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 16.dp),
-            contentAlignment = Alignment.Center
+            horizontalArrangement = Arrangement.Center
         ) {
             Button(onClick = onRecord) { Text("Record") }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(onClick = onViewRecordings) { Text("View Recordings") }
         }
 
         LazyColumn(
