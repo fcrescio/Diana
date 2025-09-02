@@ -8,36 +8,44 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.util.Locale
 
 /**
  * Maintains running text buffers for to-dos, appointments and free-form
  * thoughts, updating each by calling an LLM with strict structured outputs.
  */
-class MemoProcessor(private val apiKey: String, private val logger: LlmLogger) {
+class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, locale: Locale) {
     private val client = OkHttpClient()
 
     private var todo: String = ""
     private var appointments: String = ""
     private var thoughts: String = ""
 
+    private val prompts = Prompts.forLocale(locale)
+
     /**
      * Update the running summaries based on [memo] and return the latest values.
      */
     suspend fun process(memo: Memo): MemoSummary {
-        todo = updateBuffer("to-do list", todo, memo.text)
-        appointments = updateBuffer("appointments list", appointments, memo.text)
-        thoughts = updateBuffer("thoughts and notes", thoughts, memo.text)
+        todo = updateBuffer(prompts.todo, todo, memo.text)
+        appointments = updateBuffer(prompts.appointments, appointments, memo.text)
+        thoughts = updateBuffer(prompts.thoughts, thoughts, memo.text)
         return MemoSummary(todo, appointments, thoughts)
     }
 
     private suspend fun updateBuffer(aspect: String, prior: String, memo: String): String {
-        val schema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}"""
+        val schema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}""""
+        val system = prompts.systemTemplate.replace("{aspect}", aspect)
+        val user = prompts.userTemplate
+            .replace("{aspect}", aspect)
+            .replace("{prior}", prior)
+            .replace("{memo}", memo)
         val json = """
             {
               "model": "mistralai/mistral-nemo",
               "messages": [
-                {"role":"system","content":"You maintain a $aspect document. Return only JSON."},
-                {"role":"user","content":"Current $aspect:\n$prior\n\nNew memo:\n$memo\n\nReturn the updated $aspect in the field 'updated'."}
+                {"role":"system","content":"$system"},
+                {"role":"user","content":"$user"}
               ],
               "response_format": {
                 "type":"json_schema",
@@ -84,3 +92,41 @@ class LlmLogger {
     fun entries(): List<String> = logs
 }
 
+/**
+ * Holds localized strings for interacting with the LLM.
+ */
+data class Prompts(
+    val todo: String,
+    val appointments: String,
+    val thoughts: String,
+    val systemTemplate: String,
+    val userTemplate: String
+) {
+    companion object {
+        fun forLocale(locale: Locale): Prompts {
+            return when (locale.language) {
+                "it" -> Prompts(
+                    todo = "lista di cose da fare",
+                    appointments = "lista degli appuntamenti",
+                    thoughts = "pensieri e note",
+                    systemTemplate = "Gestisci un documento {aspect}. Restituisci solo JSON.",
+                    userTemplate = "Stato attuale della {aspect}:\n{prior}\n\nNuovo memo:\n{memo}\n\nRestituisci la {aspect} aggiornata nel campo 'updated', nella stessa lingua del nuovo memo."
+                )
+                "fr" -> Prompts(
+                    todo = "liste de tâches",
+                    appointments = "liste des rendez-vous",
+                    thoughts = "pensées et notes",
+                    systemTemplate = "Vous maintenez un document de {aspect}. Retournez uniquement du JSON.",
+                    userTemplate = "État actuel de la {aspect}:\n{prior}\n\nNouveau mémo:\n{memo}\n\nRetournez la {aspect} mise à jour dans le champ 'updated', dans la même langue que le nouveau mémo."
+                )
+                else -> Prompts(
+                    todo = "to-do list",
+                    appointments = "appointments list",
+                    thoughts = "thoughts and notes",
+                    systemTemplate = "You maintain a {aspect} document. Return only JSON.",
+                    userTemplate = "Current {aspect}:\n{prior}\n\nNew memo:\n{memo}\n\nReturn the updated {aspect} in the field 'updated', in the same language as the new memo."
+                )
+            }
+        }
+    }
+}
