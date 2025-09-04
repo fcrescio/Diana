@@ -9,9 +9,9 @@
     <string name="back">Retour</string>
     <string name="play">Lire</string>
     <string name="settings">Paramètres</string>
-    <string name="finish_recording">Terminer l'enregistrement</string>
+    <string name="finish_recording">Terminer l\'enregistrement</string>
     <string name="save">Sauvegarder</string>
-    <string name="processing">Traitement...</string>
+    <string name="processing">Traitement…</string>
     <string name="log_recorded_memo">Mémo enregistré</string>
     <string name="log_added_memo">Mémo ajouté</string>
 </resources>
