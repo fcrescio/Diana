@@ -75,6 +75,7 @@ fun DianaApp(repository: NoteRepository) {
             appointments = summary.appointments
             thoughts = summary.thoughts
             repository.saveSummary(summary)
+            screen = Screen.List
         }
     }
 
@@ -92,16 +93,16 @@ fun DianaApp(repository: NoteRepository) {
         Screen.Recorder -> RecorderScreen(logs, addLog = { logs.add(it) }) { memo ->
             recordedMemos.add(memo)
             logs.add(logRecorded)
+            screen = Screen.Processing
             processMemo(memo)
-            screen = Screen.List
         }
         Screen.TextMemo -> TextMemoScreen(onSave = { text ->
             val memo = Memo(text)
             logs.add(logAdded)
+            screen = Screen.Processing
             processMemo(memo)
-            screen = Screen.List
         })
-        Screen.Processing -> ProcessingScreen(processingText) { screen = Screen.List }
+        Screen.Processing -> ProcessingScreen(processingText, logs)
         Screen.Settings -> SettingsScreen()
     }
 }
