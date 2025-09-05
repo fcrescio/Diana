@@ -1,5 +1,6 @@
 package li.crescio.penates.diana.transcriber
 
+import android.util.Log
 import li.crescio.penates.diana.notes.RawRecording
 import li.crescio.penates.diana.notes.Transcript
 import kotlinx.coroutines.Dispatchers
@@ -36,11 +37,16 @@ class GroqTranscriber(private val apiKey: String) : Transcriber {
                 .post(body)
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("Unexpected code $response")
-                val json = JSONObject(response.body?.string().orEmpty())
-                val text = json.optString("text", "")
-                Transcript(text)
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("Unexpected code $response")
+                    val json = JSONObject(response.body?.string().orEmpty())
+                    val text = json.optString("text", "")
+                    Transcript(text)
+                }
+            } catch (e: Exception) {
+                Log.e("GroqTranscriber", "Transcription failed", e)
+                throw e
             }
         }
 }
