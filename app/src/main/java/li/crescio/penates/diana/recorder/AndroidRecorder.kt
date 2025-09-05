@@ -16,13 +16,13 @@ class AndroidRecorder(private val context: Context) : Recorder {
     private fun cleanupRecorder() {
         recorder?.apply {
             try {
-                reset()
+                release()
             } catch (_: Exception) {
-                // Ignore reset errors, we just want to release resources
+                // Ignore release errors, we just want to free resources
             }
-            release()
         }
         recorder = null
+        outputFile = null
     }
 
     override suspend fun start() = withContext(Dispatchers.IO) {
@@ -33,15 +33,22 @@ class AndroidRecorder(private val context: Context) : Recorder {
         val file = File.createTempFile("rec_", ".m4a", outputDir)
         outputFile = file
 
-        recorder = MediaRecorder().apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setAudioEncodingBitRate(96_000)
-            setAudioSamplingRate(44_100)
-            setOutputFile(file.absolutePath)
-            prepare()
-            start()
+        recorder = MediaRecorder(context).apply {
+            try {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioEncodingBitRate(96_000)
+                setAudioSamplingRate(44_100)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            } catch (e: Exception) {
+                release()
+                recorder = null
+                outputFile = null
+                throw e
+            }
         }
     }
 
