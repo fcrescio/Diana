@@ -14,4 +14,9 @@
     <string name="processing">Elaborazione...</string>
     <string name="log_recorded_memo">Memo registrato</string>
     <string name="log_added_memo">Memo aggiunto</string>
+    <string name="log_start_recording">Avvio registrazione</string>
+    <string name="log_recording_started">Registrazione avviata</string>
+    <string name="log_stop_recording">Arresto registrazione</string>
+    <string name="log_transcription_complete">Trascrizione completata</string>
+    <string name="log_transcription_failed">Trascrizione fallita</string>
 </resources>

@@ -27,12 +27,22 @@ import li.crescio.penates.diana.transcriber.GroqTranscriber
 import li.crescio.penates.diana.R
 
 @Composable
-fun RecorderScreen(logs: List<String>, onFinish: (Memo) -> Unit) {
+fun RecorderScreen(
+    logs: List<String>,
+    addLog: (String) -> Unit,
+    onFinish: (Memo) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     val recorder = remember { AndroidRecorder(context) }
     val transcriber = remember { GroqTranscriber(BuildConfig.GROQ_API_KEY) }
+
+    val logStart = stringResource(R.string.log_start_recording)
+    val logStarted = stringResource(R.string.log_recording_started)
+    val logStop = stringResource(R.string.log_stop_recording)
+    val logTransComplete = stringResource(R.string.log_transcription_complete)
+    val logTransFail = stringResource(R.string.log_transcription_failed)
 
     var hasPermission by remember {
         mutableStateOf(
@@ -52,8 +62,10 @@ fun RecorderScreen(logs: List<String>, onFinish: (Memo) -> Unit) {
 
     LaunchedEffect(hasPermission) {
         if (hasPermission && !isRecording) {
+            addLog(logStart)
             recorder.start()
             isRecording = true
+            addLog(logStarted)
         } else if (!hasPermission) {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -69,9 +81,16 @@ fun RecorderScreen(logs: List<String>, onFinish: (Memo) -> Unit) {
             Button(
                 onClick = {
                     scope.launch {
+                        addLog(logStop)
                         val recording = recorder.stop()
-                        val transcript = transcriber.transcribe(recording)
-                        onFinish(Memo(transcript.text, recording.filePath))
+                        try {
+                            val transcript = transcriber.transcribe(recording)
+                            addLog(logTransComplete)
+                            onFinish(Memo(transcript.text, recording.filePath))
+                        } catch (e: Exception) {
+                            addLog("$logTransFail: ${e.message}")
+                            onFinish(Memo("", recording.filePath))
+                        }
                     }
                 },
                 enabled = isRecording

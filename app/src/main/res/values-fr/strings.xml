@@ -14,4 +14,9 @@
     <string name="processing">Traitement…</string>
     <string name="log_recorded_memo">Mémo enregistré</string>
     <string name="log_added_memo">Mémo ajouté</string>
+    <string name="log_start_recording">Démarrage de l'enregistrement</string>
+    <string name="log_recording_started">Enregistrement démarré</string>
+    <string name="log_stop_recording">Arrêt de l'enregistrement</string>
+    <string name="log_transcription_complete">Transcription terminée</string>
+    <string name="log_transcription_failed">Échec de la transcription</string>
 </resources>
