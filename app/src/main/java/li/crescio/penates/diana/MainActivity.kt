@@ -5,27 +5,35 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.ui.res.stringResource
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.notes.Memo
+import li.crescio.penates.diana.notes.StructuredNote
+import li.crescio.penates.diana.persistence.NoteRepository
 import li.crescio.penates.diana.player.AndroidPlayer
 import li.crescio.penates.diana.player.Player
 import li.crescio.penates.diana.ui.*
 import li.crescio.penates.diana.ui.theme.DianaTheme
 import li.crescio.penates.diana.R
 import java.util.Locale
+import java.io.File
 
 class MainActivity : ComponentActivity() {
+    private lateinit var repository: NoteRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { DianaTheme { DianaApp() } }
+        val file = File(filesDir, "notes.txt")
+        repository = NoteRepository(FirebaseFirestore.getInstance(), file)
+        setContent { DianaTheme { DianaApp(repository) } }
     }
 }
 
 @Composable
-fun DianaApp() {
+fun DianaApp(repository: NoteRepository) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
@@ -44,12 +52,29 @@ fun DianaApp() {
         logger.logFlow.collect { logs.add(it) }
     }
 
+    LaunchedEffect(repository) {
+        val notes = repository.loadNotes()
+        todo = notes.filterIsInstance<StructuredNote.ToDo>().joinToString("\n") { it.text }
+        appointments = notes.filterIsInstance<StructuredNote.Event>().joinToString("\n") { note ->
+            if (note.datetime.isNotBlank()) "${note.datetime} ${note.text}" else note.text
+        }
+        thoughts = notes.filter { it is StructuredNote.Memo || it is StructuredNote.Free }
+            .joinToString("\n") {
+                when (it) {
+                    is StructuredNote.Memo -> it.text
+                    is StructuredNote.Free -> it.text
+                    else -> ""
+                }
+            }
+    }
+
     fun processMemo(memo: Memo) {
         scope.launch {
             val summary = processor.process(memo)
             todo = summary.todo
             appointments = summary.appointments
             thoughts = summary.thoughts
+            repository.saveSummary(summary)
         }
     }
 
