@@ -14,4 +14,9 @@
     <string name="processing">Processing...</string>
     <string name="log_recorded_memo">Recorded memo</string>
     <string name="log_added_memo">Added memo</string>
+    <string name="log_start_recording">Starting recording</string>
+    <string name="log_recording_started">Recording started</string>
+    <string name="log_stop_recording">Stopping recording</string>
+    <string name="log_transcription_complete">Transcription complete</string>
+    <string name="log_transcription_failed">Transcription failed</string>
 </resources>

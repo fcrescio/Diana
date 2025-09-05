@@ -58,7 +58,7 @@ fun DianaApp() {
             onAddMemo = { screen = Screen.TextMemo }
         )
         Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
-        Screen.Recorder -> RecorderScreen(logs) { memo ->
+        Screen.Recorder -> RecorderScreen(logs, addLog = { logs.add(it) }) { memo ->
             recordedMemos.add(memo)
             logs.add(logRecorded)
             processMemo(memo)
