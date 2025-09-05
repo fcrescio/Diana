@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.notes.Memo
@@ -28,15 +29,20 @@ fun DianaApp() {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
+    val logger = remember { LlmLogger() }
     var todo by remember { mutableStateOf("") }
     var appointments by remember { mutableStateOf("") }
     var thoughts by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val processor = remember { MemoProcessor(BuildConfig.OPENROUTER_API_KEY, LlmLogger(), Locale.getDefault()) }
+    val processor = remember { MemoProcessor(BuildConfig.OPENROUTER_API_KEY, logger, Locale.getDefault()) }
     val player: Player = remember { AndroidPlayer() }
     val logRecorded = stringResource(R.string.log_recorded_memo)
     val logAdded = stringResource(R.string.log_added_memo)
     val processingText = stringResource(R.string.processing)
+
+    LaunchedEffect(logger) {
+        logger.logFlow.collect { logs.add(it) }
+    }
 
     fun processMemo(memo: Memo) {
         scope.launch {
