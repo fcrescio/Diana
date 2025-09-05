@@ -3,6 +3,9 @@ package li.crescio.penates.diana.llm
 import li.crescio.penates.diana.notes.Memo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -86,9 +89,15 @@ data class MemoSummary(val todo: String, val appointments: String, val thoughts:
 
 class LlmLogger {
     private val logs = mutableListOf<String>()
+    private val _logFlow = MutableSharedFlow<String>()
+    val logFlow: SharedFlow<String> = _logFlow.asSharedFlow()
+
     fun log(request: String, response: String) {
-        logs += "REQUEST: $request\nRESPONSE: $response"
+        val entry = "REQUEST: $request\nRESPONSE: $response"
+        logs += entry
+        _logFlow.tryEmit(entry)
     }
+
     fun entries(): List<String> = logs
 }
 
