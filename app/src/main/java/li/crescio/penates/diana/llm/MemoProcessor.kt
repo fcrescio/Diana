@@ -13,6 +13,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+import kotlin.collections.ArrayDeque
 
 /**
  * Maintains running text buffers for to-dos, appointments and free-form
@@ -111,18 +112,21 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, l
 
 data class MemoSummary(val todo: String, val appointments: String, val thoughts: String)
 
-class LlmLogger {
-    private val logs = mutableListOf<String>()
+class LlmLogger(private val maxLogs: Int = 100) {
+    private val logs = ArrayDeque<String>()
     private val _logFlow = MutableSharedFlow<String>()
     val logFlow: SharedFlow<String> = _logFlow.asSharedFlow()
 
     fun log(request: String, response: String) {
         val entry = "REQUEST: $request\nRESPONSE: $response"
-        logs += entry
+        if (logs.size == maxLogs) {
+            logs.removeFirst()
+        }
+        logs.addLast(entry)
         _logFlow.tryEmit(entry)
     }
 
-    fun entries(): List<String> = logs
+    fun entries(): List<String> = logs.toList()
 }
 
 /**

@@ -4,9 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +26,12 @@ fun NotesListScreen(
     onAddMemo: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        val listState = rememberLazyListState()
+        LaunchedEffect(logs.size) {
+            if (logs.isNotEmpty()) {
+                listState.scrollToItem(logs.lastIndex)
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -63,7 +70,7 @@ fun NotesListScreen(
                 .height(120.dp)
                 .background(Color.Black)
         ) {
-            LazyColumn(modifier = Modifier.padding(8.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
                 items(logs) { log ->
                     Text(
                         log,
