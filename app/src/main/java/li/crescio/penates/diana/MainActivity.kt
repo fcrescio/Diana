@@ -37,6 +37,13 @@ fun DianaApp(repository: NoteRepository) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
+    
+    fun addLog(message: String) {
+        logs.add(message)
+        if (logs.size > 100) {
+            logs.removeAt(0)
+        }
+    }
     val logger = remember { LlmLogger() }
     var todo by remember { mutableStateOf("") }
     var appointments by remember { mutableStateOf("") }
@@ -49,7 +56,7 @@ fun DianaApp(repository: NoteRepository) {
     val processingText = stringResource(R.string.processing)
 
     LaunchedEffect(logger) {
-        logger.logFlow.collect { logs.add(it) }
+        logger.logFlow.collect { addLog(it) }
     }
 
     LaunchedEffect(repository) {
@@ -90,15 +97,15 @@ fun DianaApp(repository: NoteRepository) {
             onAddMemo = { screen = Screen.TextMemo }
         )
         Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
-        Screen.Recorder -> RecorderScreen(logs, addLog = { logs.add(it) }) { memo ->
+        Screen.Recorder -> RecorderScreen(logs, addLog = { addLog(it) }) { memo ->
             recordedMemos.add(memo)
-            logs.add(logRecorded)
+            addLog(logRecorded)
             screen = Screen.Processing
             processMemo(memo)
         }
         Screen.TextMemo -> TextMemoScreen(onSave = { text ->
             val memo = Memo(text)
-            logs.add(logAdded)
+            addLog(logAdded)
             screen = Screen.Processing
             processMemo(memo)
         })

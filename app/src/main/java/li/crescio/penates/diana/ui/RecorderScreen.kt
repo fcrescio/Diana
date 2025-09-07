@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -72,6 +73,12 @@ fun RecorderScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        val listState = rememberLazyListState()
+        LaunchedEffect(logs.size) {
+            if (logs.isNotEmpty()) {
+                listState.scrollToItem(logs.lastIndex)
+            }
+        }
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -103,7 +110,7 @@ fun RecorderScreen(
                 .height(120.dp)
                 .background(Color.Black)
         ) {
-            LazyColumn(modifier = Modifier.padding(8.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
                 items(logs) { log ->
                     Text(
                         log,
