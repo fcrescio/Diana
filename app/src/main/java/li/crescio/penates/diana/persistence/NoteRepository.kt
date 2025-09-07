@@ -44,7 +44,15 @@ class NoteRepository(
             emptyList()
         }
 
-        return local + remote
+        val combined = local + remote
+        return combined.distinctBy { noteKey(it) }
+    }
+
+    private fun noteKey(note: StructuredNote): String = when (note) {
+        is StructuredNote.ToDo -> "todo:${note.text}"
+        is StructuredNote.Memo -> "memo:${note.text}"
+        is StructuredNote.Event -> "event:${note.text}|${note.datetime}"
+        is StructuredNote.Free -> "free:${note.text}"
     }
 
     private fun toJson(note: StructuredNote): String {
