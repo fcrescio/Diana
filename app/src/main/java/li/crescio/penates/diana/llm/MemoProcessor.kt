@@ -2,31 +2,36 @@ package li.crescio.penates.diana.llm
 
 import li.crescio.penates.diana.notes.Memo
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import java.io.IOException
 import kotlin.collections.ArrayDeque
 
 /**
  * Maintains running text buffers for to-dos, appointments and free-form
  * thoughts, updating each by calling an LLM with strict structured outputs.
  */
-class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, locale: Locale) {
-    private val client = OkHttpClient.Builder()
+class MemoProcessor(
+    private val apiKey: String,
+    private val logger: LlmLogger,
+    locale: Locale,
+    private val baseUrl: String = "https://openrouter.ai/api/v1/chat/completions",
+    private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
+) {
 
     private var todo: String = ""
     private var appointments: String = ""
@@ -70,7 +75,7 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, l
 
         val requestBody = json.toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
-            .url("https://openrouter.ai/api/v1/chat/completions")
+            .url(baseUrl)
             .header("Authorization", "Bearer $apiKey")
             .post(requestBody)
             .build()
