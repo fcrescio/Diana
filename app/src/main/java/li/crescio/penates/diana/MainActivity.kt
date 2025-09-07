@@ -4,6 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Scaffold
 import androidx.compose.ui.res.stringResource
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -54,6 +58,9 @@ fun DianaApp(repository: NoteRepository) {
     val logRecorded = stringResource(R.string.log_recorded_memo)
     val logAdded = stringResource(R.string.log_added_memo)
     val processingText = stringResource(R.string.processing)
+    val logLlmFailed = stringResource(R.string.log_llm_failed)
+    val retryLabel = stringResource(R.string.retry)
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(logger) {
         logger.logFlow.collect { addLog(it) }
@@ -77,40 +84,58 @@ fun DianaApp(repository: NoteRepository) {
 
     fun processMemo(memo: Memo) {
         scope.launch {
-            val summary = processor.process(memo)
-            todo = summary.todo
-            appointments = summary.appointments
-            thoughts = summary.thoughts
-            repository.saveSummary(summary)
-            screen = Screen.List
+            try {
+                val summary = processor.process(memo)
+                todo = summary.todo
+                appointments = summary.appointments
+                thoughts = summary.thoughts
+                repository.saveSummary(summary)
+                screen = Screen.List
+            } catch (e: Exception) {
+                val result = snackbarHostState.showSnackbar(
+                    message = logLlmFailed,
+                    actionLabel = retryLabel
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    processMemo(memo)
+                } else {
+                    screen = Screen.List
+                }
+            }
         }
     }
 
-    when (screen) {
-        Screen.List -> NotesListScreen(
-            todo,
-            appointments,
-            thoughts,
-            logs,
-            onRecord = { screen = Screen.Recorder },
-            onViewRecordings = { screen = Screen.Recordings },
-            onAddMemo = { screen = Screen.TextMemo }
-        )
-        Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
-        Screen.Recorder -> RecorderScreen(logs, addLog = { addLog(it) }) { memo ->
-            recordedMemos.add(memo)
-            addLog(logRecorded)
-            screen = Screen.Processing
-            processMemo(memo)
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) {
+        when (screen) {
+            Screen.List -> NotesListScreen(
+                todo,
+                appointments,
+                thoughts,
+                logs,
+                onRecord = { screen = Screen.Recorder },
+                onViewRecordings = { screen = Screen.Recordings },
+                onAddMemo = { screen = Screen.TextMemo }
+            )
+            Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
+            Screen.Recorder -> RecorderScreen(
+                logs,
+                addLog = { addLog(it) },
+                snackbarHostState = snackbarHostState
+            ) { memo ->
+                recordedMemos.add(memo)
+                addLog(logRecorded)
+                screen = Screen.Processing
+                processMemo(memo)
+            }
+            Screen.TextMemo -> TextMemoScreen(onSave = { text ->
+                val memo = Memo(text)
+                addLog(logAdded)
+                screen = Screen.Processing
+                processMemo(memo)
+            })
+            Screen.Processing -> ProcessingScreen(processingText, logs)
+            Screen.Settings -> SettingsScreen()
         }
-        Screen.TextMemo -> TextMemoScreen(onSave = { text ->
-            val memo = Memo(text)
-            addLog(logAdded)
-            screen = Screen.Processing
-            processMemo(memo)
-        })
-        Screen.Processing -> ProcessingScreen(processingText, logs)
-        Screen.Settings -> SettingsScreen()
     }
 }
 

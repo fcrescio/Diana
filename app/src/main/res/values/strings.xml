@@ -19,4 +19,6 @@
     <string name="log_stop_recording">Stopping recording</string>
     <string name="log_transcription_complete">Transcription complete</string>
     <string name="log_transcription_failed">Transcription failed</string>
+    <string name="log_llm_failed">Processing failed</string>
+    <string name="retry">Retry</string>
 </resources>

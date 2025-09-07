@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +25,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import li.crescio.penates.diana.BuildConfig
 import li.crescio.penates.diana.notes.Memo
+import li.crescio.penates.diana.notes.Transcript
 import li.crescio.penates.diana.recorder.AndroidRecorder
 import li.crescio.penates.diana.transcriber.GroqTranscriber
 import li.crescio.penates.diana.R
@@ -31,6 +34,7 @@ import li.crescio.penates.diana.R
 fun RecorderScreen(
     logs: List<String>,
     addLog: (String) -> Unit,
+    snackbarHostState: SnackbarHostState,
     onFinish: (Memo) -> Unit
 ) {
     val context = LocalContext.current
@@ -44,6 +48,7 @@ fun RecorderScreen(
     val logStop = stringResource(R.string.log_stop_recording)
     val logTransComplete = stringResource(R.string.log_transcription_complete)
     val logTransFail = stringResource(R.string.log_transcription_failed)
+    val retryLabel = stringResource(R.string.retry)
 
     var hasPermission by remember {
         mutableStateOf(
@@ -90,14 +95,23 @@ fun RecorderScreen(
                     scope.launch {
                         addLog(logStop)
                         val recording = recorder.stop()
-                        try {
-                            val transcript = transcriber.transcribe(recording)
-                            addLog(logTransComplete)
-                            onFinish(Memo(transcript.text, recording.filePath))
-                        } catch (e: Exception) {
-                            addLog("$logTransFail: ${e.message}")
-                            onFinish(Memo("", recording.filePath))
+                        var transcript: Transcript? = null
+                        while (transcript == null) {
+                            try {
+                                transcript = transcriber.transcribe(recording)
+                                addLog(logTransComplete)
+                            } catch (e: Exception) {
+                                addLog("$logTransFail: ${e.message}")
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "$logTransFail: ${e.message}",
+                                    actionLabel = retryLabel
+                                )
+                                if (result != SnackbarResult.ActionPerformed) {
+                                    break
+                                }
+                            }
                         }
+                        onFinish(Memo(transcript?.text.orEmpty(), recording.filePath))
                     }
                 },
                 enabled = isRecording

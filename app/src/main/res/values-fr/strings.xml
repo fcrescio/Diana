@@ -19,4 +19,6 @@
     <string name="log_stop_recording">Arrêt de l\'enregistrement</string>
     <string name="log_transcription_complete">Transcription terminée</string>
     <string name="log_transcription_failed">Échec de la transcription</string>
+    <string name="log_llm_failed">Échec du traitement</string>
+    <string name="retry">Réessayer</string>
 </resources>

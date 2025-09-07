@@ -19,4 +19,6 @@
     <string name="log_stop_recording">Arresto registrazione</string>
     <string name="log_transcription_complete">Trascrizione completata</string>
     <string name="log_transcription_failed">Trascrizione fallita</string>
+    <string name="log_llm_failed">Elaborazione fallita</string>
+    <string name="retry">Riprova</string>
 </resources>
