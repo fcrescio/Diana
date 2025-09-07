@@ -10,6 +10,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
+import li.crescio.penates.diana.llm.MemoSummary
 import li.crescio.penates.diana.notes.StructuredNote
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -98,6 +99,35 @@ class NoteRepositoryTest {
             StructuredNote.Event("meet", "2024-05-01", createdAt = 300L),
             StructuredNote.Memo("memo", createdAt = 200L),
             StructuredNote.ToDo("task", createdAt = 100L)
+        )
+
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun summaryToNotes_splitsAndTrimsMultilineText() {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val repo = NoteRepository(mockk(), createTempFile().toFile())
+
+        val summary = MemoSummary(
+            todo = " task one  \n\n task two \n",
+            appointments = " meet Alice  \n \n meet Bob \n",
+            thoughts = " idea one \n idea two  \n"
+        )
+
+        val method = NoteRepository::class.java
+            .getDeclaredMethod("summaryToNotes", MemoSummary::class.java)
+            .apply { isAccessible = true }
+
+        val result = method.invoke(repo, summary) as List<StructuredNote>
+
+        val expected = listOf(
+            StructuredNote.ToDo("task one"),
+            StructuredNote.ToDo("task two"),
+            StructuredNote.Event("meet Alice", ""),
+            StructuredNote.Event("meet Bob", ""),
+            StructuredNote.Memo("idea one"),
+            StructuredNote.Memo("idea two")
         )
 
         assertEquals(expected, result)
