@@ -4,6 +4,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.MemoSummary
 import li.crescio.penates.diana.notes.StructuredNote
+import org.json.JSONObject
 import java.io.File
 
 class NoteRepository(
@@ -11,8 +12,10 @@ class NoteRepository(
     private val file: File
 ) {
     suspend fun saveNotes(notes: List<StructuredNote>) {
-        file.writeText(notes.joinToString("\n") { it.toString() })
-        firestore.collection("notes").add(mapOf("raw" to notes.map { it.toString() }))
+        file.writeText(notes.joinToString("\n") { toJson(it) })
+        for (note in notes) {
+            firestore.collection("notes").add(noteToMap(note)).await()
+        }
     }
 
     suspend fun saveSummary(summary: MemoSummary) {
@@ -25,11 +28,18 @@ class NoteRepository(
         } else emptyList()
 
         val remote = try {
-            firestore.collection("notes").get().await().documents
-                .flatMap { doc ->
-                    val raws = doc.get("raw") as? List<*>
-                    raws?.mapNotNull { parse(it.toString()) } ?: emptyList()
+            firestore.collection("notes").get().await().documents.mapNotNull { doc ->
+                val type = doc.getString("type")
+                val text = doc.getString("text")
+                val datetime = doc.getString("datetime") ?: ""
+                when (type) {
+                    "todo" -> text?.let { StructuredNote.ToDo(it) }
+                    "memo" -> text?.let { StructuredNote.Memo(it) }
+                    "event" -> text?.let { StructuredNote.Event(it, datetime) }
+                    "free" -> text?.let { StructuredNote.Free(it) }
+                    else -> null
                 }
+            }
         } catch (_: Exception) {
             emptyList()
         }
@@ -37,20 +47,32 @@ class NoteRepository(
         return local + remote
     }
 
+    private fun toJson(note: StructuredNote): String {
+        return JSONObject(noteToMap(note)).toString()
+    }
+
+    private fun noteToMap(note: StructuredNote): Map<String, String> = when (note) {
+        is StructuredNote.ToDo -> mapOf("type" to "todo", "text" to note.text, "datetime" to "")
+        is StructuredNote.Memo -> mapOf("type" to "memo", "text" to note.text, "datetime" to "")
+        is StructuredNote.Event -> mapOf("type" to "event", "text" to note.text, "datetime" to note.datetime)
+        is StructuredNote.Free -> mapOf("type" to "free", "text" to note.text, "datetime" to "")
+    }
+
     private fun parse(line: String): StructuredNote? {
-        return when {
-            line.startsWith("ToDo(") ->
-                StructuredNote.ToDo(line.substringAfter("text=").substringBeforeLast(")"))
-            line.startsWith("Memo(") ->
-                StructuredNote.Memo(line.substringAfter("text=").substringBeforeLast(")"))
-            line.startsWith("Event(") -> {
-                val textPart = line.substringAfter("text=").substringBefore(", datetime=")
-                val datePart = line.substringAfter(", datetime=").substringBeforeLast(")")
-                StructuredNote.Event(textPart, datePart)
+        return try {
+            val obj = JSONObject(line)
+            val type = obj.getString("type")
+            val text = obj.getString("text")
+            val datetime = obj.optString("datetime", "")
+            when (type) {
+                "todo" -> StructuredNote.ToDo(text)
+                "memo" -> StructuredNote.Memo(text)
+                "event" -> StructuredNote.Event(text, datetime)
+                "free" -> StructuredNote.Free(text)
+                else -> null
             }
-            line.startsWith("Free(") ->
-                StructuredNote.Free(line.substringAfter("text=").substringBeforeLast(")"))
-            else -> null
+        } catch (_: Exception) {
+            null
         }
     }
 
