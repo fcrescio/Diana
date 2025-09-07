@@ -32,11 +32,12 @@ class NoteRepository(
                 val type = doc.getString("type")
                 val text = doc.getString("text")
                 val datetime = doc.getString("datetime") ?: ""
+                val createdAt = doc.getLong("createdAt") ?: 0L
                 when (type) {
-                    "todo" -> text?.let { StructuredNote.ToDo(it) }
-                    "memo" -> text?.let { StructuredNote.Memo(it) }
-                    "event" -> text?.let { StructuredNote.Event(it, datetime) }
-                    "free" -> text?.let { StructuredNote.Free(it) }
+                    "todo" -> text?.let { StructuredNote.ToDo(it, createdAt) }
+                    "memo" -> text?.let { StructuredNote.Memo(it, createdAt) }
+                    "event" -> text?.let { StructuredNote.Event(it, datetime, createdAt) }
+                    "free" -> text?.let { StructuredNote.Free(it, createdAt) }
                     else -> null
                 }
             }
@@ -45,7 +46,7 @@ class NoteRepository(
         }
 
         val combined = local + remote
-        return combined.distinctBy { noteKey(it) }
+        return combined.distinctBy { noteKey(it) }.sortedByDescending { it.createdAt }
     }
 
     private fun noteKey(note: StructuredNote): String = when (note) {
@@ -59,11 +60,31 @@ class NoteRepository(
         return JSONObject(noteToMap(note)).toString()
     }
 
-    private fun noteToMap(note: StructuredNote): Map<String, String> = when (note) {
-        is StructuredNote.ToDo -> mapOf("type" to "todo", "text" to note.text, "datetime" to "")
-        is StructuredNote.Memo -> mapOf("type" to "memo", "text" to note.text, "datetime" to "")
-        is StructuredNote.Event -> mapOf("type" to "event", "text" to note.text, "datetime" to note.datetime)
-        is StructuredNote.Free -> mapOf("type" to "free", "text" to note.text, "datetime" to "")
+    private fun noteToMap(note: StructuredNote): Map<String, Any> = when (note) {
+        is StructuredNote.ToDo -> mapOf(
+            "type" to "todo",
+            "text" to note.text,
+            "datetime" to "",
+            "createdAt" to note.createdAt
+        )
+        is StructuredNote.Memo -> mapOf(
+            "type" to "memo",
+            "text" to note.text,
+            "datetime" to "",
+            "createdAt" to note.createdAt
+        )
+        is StructuredNote.Event -> mapOf(
+            "type" to "event",
+            "text" to note.text,
+            "datetime" to note.datetime,
+            "createdAt" to note.createdAt
+        )
+        is StructuredNote.Free -> mapOf(
+            "type" to "free",
+            "text" to note.text,
+            "datetime" to "",
+            "createdAt" to note.createdAt
+        )
     }
 
     private fun parse(line: String): StructuredNote? {
@@ -72,11 +93,12 @@ class NoteRepository(
             val type = obj.getString("type")
             val text = obj.getString("text")
             val datetime = obj.optString("datetime", "")
+            val createdAt = obj.optLong("createdAt", 0L)
             when (type) {
-                "todo" -> StructuredNote.ToDo(text)
-                "memo" -> StructuredNote.Memo(text)
-                "event" -> StructuredNote.Event(text, datetime)
-                "free" -> StructuredNote.Free(text)
+                "todo" -> StructuredNote.ToDo(text, createdAt)
+                "memo" -> StructuredNote.Memo(text, createdAt)
+                "event" -> StructuredNote.Event(text, datetime, createdAt)
+                "free" -> StructuredNote.Free(text, createdAt)
                 else -> null
             }
         } catch (_: Exception) {

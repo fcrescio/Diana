@@ -13,6 +13,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import java.io.IOException
 import kotlin.collections.ArrayDeque
 
 /**
@@ -20,7 +22,11 @@ import kotlin.collections.ArrayDeque
  * thoughts, updating each by calling an LLM with strict structured outputs.
  */
 class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, locale: Locale) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     private var todo: String = ""
     private var appointments: String = ""
@@ -76,7 +82,7 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, l
         }
         if (code !in 200..299) {
             logger.log(json, "HTTP $code $message: $responseText")
-            return prior
+            throw IOException("HTTP $code $message")
         }
         logger.log(json, responseText)
 
@@ -85,9 +91,9 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, l
                 .optJSONArray("choices")
                 ?.optJSONObject(0)
                 ?.optJSONObject("message")
-        } catch (_: Exception) {
-            null
-        } ?: return prior
+        } catch (e: Exception) {
+            throw IOException("Invalid response", e)
+        } ?: throw IOException("Empty response")
 
         val rawContent = when (val content = messageObj.opt("content")) {
             is String -> content
@@ -98,14 +104,14 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, l
             }
             else -> ""
         }
-        if (rawContent.isBlank()) return prior
+        if (rawContent.isBlank()) throw IOException("Blank content")
 
         val jsonMatch = Regex("\\{.*\\}", RegexOption.DOT_MATCHES_ALL).find(rawContent)
-            ?: return prior
+            ?: throw IOException("No JSON found")
         return try {
             JSONObject(jsonMatch.value).optString("updated", prior)
-        } catch (_: Exception) {
-            prior
+        } catch (e: Exception) {
+            throw IOException("Invalid JSON", e)
         }
     }
 }
