@@ -3,7 +3,9 @@ package li.crescio.penates.diana.persistence
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.QuerySnapshot
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -49,6 +51,56 @@ class NoteRepositoryTest {
 
         verify(exactly = notes.size) { collection.add(any()) }
         assertEquals(notes.map { expectedMap(it) }, captured)
+    }
+
+    @Test
+    fun loadNotes_mergesLocalAndRemote_removingDuplicates_andSortsDescending() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val file = createTempFile().toFile()
+
+        val localNotes = listOf(
+            StructuredNote.ToDo("task", createdAt = 100L),
+            StructuredNote.Memo("memo", createdAt = 200L)
+        )
+        file.writeText(localNotes.joinToString("\n") { JSONObject(expectedMap(it)).toString() })
+
+        val firestore = mockk<FirebaseFirestore>()
+        val collection = mockk<CollectionReference>()
+        val querySnapshot = mockk<QuerySnapshot>()
+        val doc1 = mockk<DocumentSnapshot>()
+        val doc2 = mockk<DocumentSnapshot>()
+        val doc3 = mockk<DocumentSnapshot>()
+
+        every { firestore.collection("notes") } returns collection
+        every { collection.get() } returns Tasks.forResult(querySnapshot)
+        every { querySnapshot.documents } returns listOf(doc1, doc2, doc3)
+
+        every { doc1.getString("type") } returns "todo"
+        every { doc1.getString("text") } returns "task"
+        every { doc1.getString("datetime") } returns ""
+        every { doc1.getLong("createdAt") } returns 150L
+
+        every { doc2.getString("type") } returns "memo"
+        every { doc2.getString("text") } returns "memo"
+        every { doc2.getString("datetime") } returns ""
+        every { doc2.getLong("createdAt") } returns 250L
+
+        every { doc3.getString("type") } returns "event"
+        every { doc3.getString("text") } returns "meet"
+        every { doc3.getString("datetime") } returns "2024-05-01"
+        every { doc3.getLong("createdAt") } returns 300L
+
+        val repo = NoteRepository(firestore, file)
+
+        val result = repo.loadNotes()
+
+        val expected = listOf(
+            StructuredNote.Event("meet", "2024-05-01", createdAt = 300L),
+            StructuredNote.Memo("memo", createdAt = 200L),
+            StructuredNote.ToDo("task", createdAt = 100L)
+        )
+
+        assertEquals(expected, result)
     }
 
     private fun expectedMap(note: StructuredNote): Map<String, Any> = when (note) {
