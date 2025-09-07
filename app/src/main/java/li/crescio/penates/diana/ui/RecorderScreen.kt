@@ -24,8 +24,6 @@ import li.crescio.penates.diana.BuildConfig
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.recorder.AndroidRecorder
 import li.crescio.penates.diana.transcriber.GroqTranscriber
-import li.crescio.penates.diana.transcriber.LocalTranscriber
-import li.crescio.penates.diana.transcriber.Transcriber
 import li.crescio.penates.diana.R
 
 @Composable
@@ -38,10 +36,7 @@ fun RecorderScreen(
     val scope = rememberCoroutineScope()
 
     val recorder = remember { AndroidRecorder(context) }
-    var useLocal by remember { mutableStateOf(false) }
-    val transcriber: Transcriber = remember(useLocal) {
-        if (useLocal) LocalTranscriber(context) else GroqTranscriber(BuildConfig.GROQ_API_KEY)
-    }
+    val transcriber = remember { GroqTranscriber(BuildConfig.GROQ_API_KEY) }
 
     val logStart = stringResource(R.string.log_start_recording)
     val logStarted = stringResource(R.string.log_recording_started)
@@ -77,22 +72,6 @@ fun RecorderScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(onClick = {
-                useLocal = false
-                addLog("Using Groq transcriber")
-            }, enabled = useLocal) { Text("Groq") }
-            Button(onClick = {
-                useLocal = true
-                addLog("Using local transcriber")
-            }, enabled = !useLocal) { Text("Local") }
-        }
-
         Box(
             modifier = Modifier
                 .weight(1f)
