@@ -2,6 +2,7 @@ package li.crescio.penates.diana.recorder
 
 import android.content.Context
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import li.crescio.penates.diana.notes.RawRecording
@@ -33,15 +34,22 @@ class AndroidRecorder(private val context: Context) : Recorder {
         val file = File.createTempFile("rec_", ".m4a", outputDir)
         outputFile = file
 
-        recorder = MediaRecorder().apply {
+        val newRecorder = MediaRecorder().apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             setAudioEncodingBitRate(96_000)
             setAudioSamplingRate(44_100)
             setOutputFile(file.absolutePath)
-            prepare()
-            start()
+        }
+        recorder = newRecorder
+        try {
+            newRecorder.prepare()
+            newRecorder.start()
+        } catch (e: Exception) {
+            Log.e("AndroidRecorder", "Failed to start recording", e)
+            cleanupRecorder()
+            throw e
         }
     }
 
@@ -50,6 +58,9 @@ class AndroidRecorder(private val context: Context) : Recorder {
         val activeRecorder = recorder ?: throw IllegalStateException("Recording has not started")
         try {
             activeRecorder.stop()
+        } catch (e: Exception) {
+            Log.e("AndroidRecorder", "Failed to stop recording", e)
+            throw e
         } finally {
             cleanupRecorder()
         }
