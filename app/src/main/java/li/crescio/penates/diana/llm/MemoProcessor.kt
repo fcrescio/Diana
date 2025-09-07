@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
@@ -66,19 +67,42 @@ class MemoProcessor(private val apiKey: String, private val logger: LlmLogger, l
             .header("Authorization", "Bearer $apiKey")
             .post(requestBody)
             .build()
-        val responseText = withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { it.body?.string().orEmpty() }
+
+        val (code, message, responseText) = withContext(Dispatchers.IO) {
+            client.newCall(request).execute().use { response ->
+                Triple(response.code, response.message, response.body?.string().orEmpty())
+            }
+        }
+        if (code !in 200..299) {
+            logger.log(json, "HTTP $code $message: $responseText")
+            return prior
         }
         logger.log(json, responseText)
 
-        val content = JSONObject(responseText)
-            .optJSONArray("choices")
-            ?.optJSONObject(0)
-            ?.optJSONObject("message")
-            ?.optString("content")
+        val messageObj = try {
+            JSONObject(responseText)
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+        } catch (_: Exception) {
+            null
+        } ?: return prior
+
+        val rawContent = when (val content = messageObj.opt("content")) {
+            is String -> content
+            is JSONArray -> buildString {
+                for (i in 0 until content.length()) {
+                    append(content.optJSONObject(i)?.optString("text").orEmpty())
+                }
+            }
+            else -> ""
+        }
+        if (rawContent.isBlank()) return prior
+
+        val jsonMatch = Regex("\\{.*\\}", RegexOption.DOT_MATCHES_ALL).find(rawContent)
             ?: return prior
         return try {
-            JSONObject(content).optString("updated", prior)
+            JSONObject(jsonMatch.value).optString("updated", prior)
         } catch (_: Exception) {
             prior
         }
