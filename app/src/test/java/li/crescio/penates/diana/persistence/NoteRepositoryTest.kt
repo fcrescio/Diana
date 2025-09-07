@@ -103,6 +103,30 @@ class NoteRepositoryTest {
         assertEquals(expected, result)
     }
 
+    @Test
+    fun toJsonAndParse_roundTrip_returnsOriginalNote() {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val repo = NoteRepository(mockk(), createTempFile().toFile())
+
+        val toJson = NoteRepository::class.java.getDeclaredMethod("toJson", StructuredNote::class.java)
+            .apply { isAccessible = true }
+        val parse = NoteRepository::class.java.getDeclaredMethod("parse", String::class.java)
+            .apply { isAccessible = true }
+
+        val notes = listOf(
+            StructuredNote.ToDo("task", createdAt = 1L),
+            StructuredNote.Memo("memo", createdAt = 2L),
+            StructuredNote.Event("meet", "2024-05-01", createdAt = 3L),
+            StructuredNote.Free("free", createdAt = 4L)
+        )
+
+        notes.forEach { note ->
+            val json = toJson.invoke(repo, note) as String
+            val parsed = parse.invoke(repo, json) as StructuredNote
+            assertEquals(note, parsed)
+        }
+    }
+
     private fun expectedMap(note: StructuredNote): Map<String, Any> = when (note) {
         is StructuredNote.ToDo -> mapOf(
             "type" to "todo",
