@@ -9,7 +9,10 @@ import li.crescio.penates.diana.notes.RawRecording
 import java.io.File
 
 /** Records audio from the device microphone and stores it in a temporary file. */
-class AndroidRecorder(private val context: Context) : Recorder {
+class AndroidRecorder(
+    private val context: Context,
+    private val recorderFactory: () -> MediaRecorder = { MediaRecorder() },
+) : Recorder {
     private var recorder: MediaRecorder? = null
     private var outputFile: File? = null
 
@@ -34,7 +37,7 @@ class AndroidRecorder(private val context: Context) : Recorder {
         val file = File.createTempFile("rec_", ".m4a", outputDir)
         outputFile = file
 
-        val newRecorder = MediaRecorder().apply {
+        val newRecorder = recorderFactory().apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
