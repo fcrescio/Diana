@@ -3,9 +3,11 @@ package li.crescio.penates.diana.player
 import android.media.MediaPlayer
 
 /** Plays audio files using [MediaPlayer]. */
-class AndroidPlayer : Player {
+class AndroidPlayer(
+    private val mediaPlayerFactory: () -> MediaPlayer = { MediaPlayer() }
+) : Player {
     override fun play(filePath: String) {
-        val player = MediaPlayer()
+        val player = mediaPlayerFactory()
         var started = false
         try {
             player.setDataSource(filePath)
