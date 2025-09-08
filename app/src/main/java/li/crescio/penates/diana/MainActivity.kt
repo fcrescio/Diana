@@ -1,6 +1,7 @@
 package li.crescio.penates.diana
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
@@ -92,6 +93,8 @@ fun DianaApp(repository: NoteRepository) {
                 repository.saveSummary(summary)
                 screen = Screen.List
             } catch (e: Exception) {
+                Log.e("DianaApp", "Error processing memo: ${'$'}{e.message}", e)
+                addLog("LLM error: ${'$'}{e.message ?: e.toString()}")
                 val result = snackbarHostState.showSnackbar(
                     message = logLlmFailed,
                     actionLabel = retryLabel
