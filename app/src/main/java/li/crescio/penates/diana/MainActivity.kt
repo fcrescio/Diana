@@ -2,6 +2,7 @@ package li.crescio.penates.diana
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
@@ -11,6 +12,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.res.stringResource
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import li.crescio.penates.diana.llm.LlmLogger
@@ -32,7 +34,28 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val file = File(filesDir, "notes.txt")
-        repository = NoteRepository(FirebaseFirestore.getInstance(), file)
+        val firestore = FirebaseFirestore.getInstance()
+        repository = NoteRepository(firestore, file)
+        val testDoc = firestore.collection("test").document("init")
+        val permissionMessage =
+            "Firestore PERMISSION_DENIED. Check security rules or authentication."
+        testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
+            testDoc.get().addOnFailureListener { e ->
+                if (e is FirebaseFirestoreException &&
+                    e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    Log.e("MainActivity", permissionMessage, e)
+                    Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+                }
+            }
+        }.addOnFailureListener { e ->
+            if (e is FirebaseFirestoreException &&
+                e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+            ) {
+                Log.e("MainActivity", permissionMessage, e)
+                Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+            }
+        }
         setContent { DianaTheme { DianaApp(repository) } }
     }
 }
