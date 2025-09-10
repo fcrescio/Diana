@@ -52,11 +52,11 @@ class MemoProcessorTest {
     }
 
     @Test
-    fun process_non2xxStatus_throwsIOException() = runBlocking {
+    fun process_non2xxStatus_returnsPriorSummary() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
 
         val server = MockWebServer()
-        server.enqueue(MockResponse().setResponseCode(500).setBody("error"))
+        repeat(9) { server.enqueue(MockResponse().setResponseCode(500).setBody("error")) }
         server.start()
 
         val processor = MemoProcessor(
@@ -67,12 +67,10 @@ class MemoProcessorTest {
             client = OkHttpClient()
         )
 
-        try {
-            processor.process(Memo("sample"))
-            fail("Expected IOException")
-        } catch (e: IOException) {
-            assertEquals("HTTP 500 Server Error", e.message)
-        }
+        val summary = processor.process(Memo("sample"))
+        assertEquals("", summary.todo)
+        assertEquals("", summary.appointments)
+        assertEquals("", summary.thoughts)
 
         server.shutdown()
     }
