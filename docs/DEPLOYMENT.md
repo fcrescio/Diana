@@ -26,6 +26,6 @@ group.
 ## Local builds
 
 1. Install JDK 17 and the Android SDK.
-2. Set environment variables for `GROQ_API_KEY` and `OPENROUTER_API_KEY`.
+2. Provide `GROQ_API_KEY` and `OPENROUTER_API_KEY` either as environment variables or in `local.properties` (e.g. `OPENROUTER_API_KEY=your_key`). If `OPENROUTER_API_KEY` is empty, memo processing is disabled.
 3. Open the project in Android Studio and let Gradle sync.
 4. Run `./gradlew assembleDebug` to build and install on a device.

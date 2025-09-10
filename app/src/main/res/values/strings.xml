@@ -21,4 +21,5 @@
     <string name="log_transcription_failed">Transcription failed</string>
     <string name="log_llm_failed">Processing failed</string>
     <string name="retry">Retry</string>
+    <string name="api_key_missing">OpenRouter API key missing. Memo processing disabled.</string>
 </resources>

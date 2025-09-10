@@ -84,6 +84,7 @@ fun DianaApp(repository: NoteRepository) {
     val processingText = stringResource(R.string.processing)
     val logLlmFailed = stringResource(R.string.log_llm_failed)
     val retryLabel = stringResource(R.string.retry)
+    val logApiKeyMissing = stringResource(R.string.api_key_missing)
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(logger) {
@@ -107,6 +108,14 @@ fun DianaApp(repository: NoteRepository) {
     }
 
     fun processMemo(memo: Memo) {
+        if (BuildConfig.OPENROUTER_API_KEY.isBlank()) {
+            addLog(logApiKeyMissing)
+            scope.launch {
+                snackbarHostState.showSnackbar(logApiKeyMissing)
+                screen = Screen.List
+            }
+            return
+        }
         scope.launch {
             try {
                 val summary = processor.process(memo)
