@@ -2,6 +2,7 @@ package li.crescio.penates.diana.llm
 
 import li.crescio.penates.diana.notes.Memo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -73,6 +74,18 @@ class MemoProcessor(
             }
         """.trimIndent()
 
+        if (apiKey.isBlank()) throw IOException("Missing API key")
+        check(json.contains("\"model\": \"mistralai/mistral-nemo\"")) { "Invalid model" }
+        val schemaObject = try {
+            JSONObject(schema)
+        } catch (e: Exception) {
+            throw IOException("Invalid JSON schema", e)
+        }
+        val updatedProp = schemaObject.optJSONObject("properties")?.optJSONObject("updated")
+        check(updatedProp?.optString("type") == "string") { "Schema 'updated' must be string" }
+        val required = schemaObject.optJSONArray("required")
+        check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "updated" }) { "Schema missing 'updated'" }
+
         val requestBody = json.toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url(baseUrl)
@@ -80,16 +93,24 @@ class MemoProcessor(
             .post(requestBody)
             .build()
 
-        val (code, message, responseText) = withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                Triple(response.code, response.message, response.body?.string().orEmpty())
+        var attempt = 0
+        var responseText: String
+        while (true) {
+            val (code, message, body) = withContext(Dispatchers.IO) {
+                client.newCall(request).execute().use { response ->
+                    Triple(response.code, response.message, response.body?.string().orEmpty())
+                }
             }
+            responseText = body
+            logger.log(json, responseText)
+            if (code in 200..299) break
+            logger.log(json, "HTTP $code $message")
+            if (attempt >= 2) {
+                return prior
+            }
+            delay((1L shl attempt) * 1000L)
+            attempt++
         }
-        if (code !in 200..299) {
-            logger.log(json, "HTTP $code $message: $responseText")
-            throw IOException("HTTP $code $message")
-        }
-        logger.log(json, responseText)
 
         val messageObj = try {
             JSONObject(responseText)
