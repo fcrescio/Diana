@@ -133,8 +133,8 @@ fun DianaApp(repository: NoteRepository) {
                 repository.saveSummary(summary)
                 screen = Screen.List
             } catch (e: Exception) {
-                Log.e("DianaApp", "Error processing memo: ${'$'}{e.message}", e)
-                addLog("LLM error: ${'$'}{e.message ?: e.toString()}")
+                Log.e("DianaApp", "Error processing memo: ${e.message}", e)
+                addLog("LLM error: ${e.message ?: e}")
                 val result = snackbarHostState.showSnackbar(
                     message = logLlmFailed,
                     actionLabel = retryLabel
