@@ -10,6 +10,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.IOException
@@ -52,11 +53,11 @@ class MemoProcessorTest {
     }
 
     @Test
-    fun process_non2xxStatus_returnsPriorSummary() = runBlocking {
+    fun process_non2xxStatus_throwsIOException() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
 
         val server = MockWebServer()
-        repeat(9) { server.enqueue(MockResponse().setResponseCode(500).setBody("error")) }
+        repeat(3) { server.enqueue(MockResponse().setResponseCode(500).setBody("error")) }
         server.start()
 
         val processor = MemoProcessor(
@@ -67,10 +68,12 @@ class MemoProcessorTest {
             client = OkHttpClient()
         )
 
-        val summary = processor.process(Memo("sample"))
-        assertEquals("", summary.todo)
-        assertEquals("", summary.appointments)
-        assertEquals("", summary.thoughts)
+        try {
+            processor.process(Memo("sample"))
+            fail("Expected IOException")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("HTTP 500"))
+        }
 
         server.shutdown()
     }
