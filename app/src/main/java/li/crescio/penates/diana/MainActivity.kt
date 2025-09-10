@@ -28,6 +28,7 @@ import li.crescio.penates.diana.ui.theme.DianaTheme
 import li.crescio.penates.diana.R
 import java.util.Locale
 import java.io.File
+import java.io.IOException
 
 class MainActivity : ComponentActivity() {
     private lateinit var repository: NoteRepository
@@ -132,7 +133,7 @@ fun DianaApp(repository: NoteRepository) {
                 thoughts = summary.thoughts
                 repository.saveSummary(summary)
                 screen = Screen.List
-            } catch (e: Exception) {
+            } catch (e: IOException) {
                 Log.e("DianaApp", "Error processing memo: ${e.message}", e)
                 addLog("LLM error: ${e.message ?: e}")
                 val result = snackbarHostState.showSnackbar(
@@ -144,6 +145,11 @@ fun DianaApp(repository: NoteRepository) {
                 } else {
                     screen = Screen.List
                 }
+            } catch (e: Exception) {
+                Log.e("DianaApp", "Unexpected error processing memo: ${e.message}", e)
+                addLog("LLM error: ${e.message ?: e}")
+                snackbarHostState.showSnackbar(logLlmFailed)
+                screen = Screen.List
             }
         }
     }

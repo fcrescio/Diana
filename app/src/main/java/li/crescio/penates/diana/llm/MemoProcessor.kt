@@ -106,7 +106,7 @@ class MemoProcessor(
             if (code in 200..299) break
             logger.log(json, "HTTP $code $message")
             if (attempt >= 2) {
-                return prior
+                throw IOException("HTTP $code $message")
             }
             delay((1L shl attempt) * 1000L)
             attempt++
