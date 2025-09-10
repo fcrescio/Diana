@@ -11,6 +11,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.res.stringResource
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.launch
@@ -34,29 +35,36 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val file = File(filesDir, "notes.txt")
-        val firestore = FirebaseFirestore.getInstance()
-        repository = NoteRepository(firestore, file)
-        val testDoc = firestore.collection("test").document("init")
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
-        testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
-            testDoc.get().addOnFailureListener { e ->
-                if (e is FirebaseFirestoreException &&
-                    e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-                ) {
-                    Log.e("MainActivity", permissionMessage, e)
-                    Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+        FirebaseAuth.getInstance().signInAnonymously()
+            .addOnSuccessListener {
+                val firestore = FirebaseFirestore.getInstance()
+                repository = NoteRepository(firestore, file)
+                val testDoc = firestore.collection("test").document("init")
+                testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
+                    testDoc.get().addOnFailureListener { e ->
+                        if (e is FirebaseFirestoreException &&
+                            e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                        ) {
+                            Log.e("MainActivity", permissionMessage, e)
+                            Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }.addOnFailureListener { e ->
+                    if (e is FirebaseFirestoreException &&
+                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    ) {
+                        Log.e("MainActivity", permissionMessage, e)
+                        Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+                    }
                 }
+                setContent { DianaTheme { DianaApp(repository) } }
             }
-        }.addOnFailureListener { e ->
-            if (e is FirebaseFirestoreException &&
-                e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-            ) {
-                Log.e("MainActivity", permissionMessage, e)
-                Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+            .addOnFailureListener { e ->
+                Log.e("MainActivity", "Firebase authentication failed", e)
+                Toast.makeText(this, "Authentication failed", Toast.LENGTH_LONG).show()
             }
-        }
-        setContent { DianaTheme { DianaApp(repository) } }
     }
 }
 
