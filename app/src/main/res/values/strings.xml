@@ -6,6 +6,7 @@
     <string name="todo_list">To-Do List</string>
     <string name="appointments">Appointments</string>
     <string name="thoughts_notes">Thoughts &amp; Notes</string>
+    <string name="filter_tag">Filter by tag</string>
     <string name="back">Back</string>
     <string name="play">Play</string>
     <string name="settings">Settings</string>

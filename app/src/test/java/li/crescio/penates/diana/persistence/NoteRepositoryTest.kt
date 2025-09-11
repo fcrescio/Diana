@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import li.crescio.penates.diana.llm.MemoSummary
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.llm.Appointment
+import li.crescio.penates.diana.llm.Thought
 import li.crescio.penates.diana.notes.StructuredNote
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -39,9 +40,9 @@ class NoteRepositoryTest {
         val repo = NoteRepository(firestore, file)
         val notes = listOf(
             StructuredNote.ToDo("task", status = "open", tags = listOf("home"), createdAt = 1L),
-            StructuredNote.Memo("memo", createdAt = 2L),
+            StructuredNote.Memo("memo", tags = listOf("x"), createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", "office", createdAt = 3L),
-            StructuredNote.Free("free", createdAt = 4L)
+            StructuredNote.Free("free", tags = listOf("y"), createdAt = 4L)
         )
 
         repo.saveNotes(notes)
@@ -63,7 +64,7 @@ class NoteRepositoryTest {
 
         val localNotes = listOf(
             StructuredNote.ToDo("task", status = "open", tags = listOf(), createdAt = 100L),
-            StructuredNote.Memo("memo", createdAt = 200L)
+            StructuredNote.Memo("memo", tags = emptyList(), createdAt = 200L)
         )
         file.writeText(localNotes.joinToString("\n") { JSONObject(expectedMap(it)).toString() })
 
@@ -91,6 +92,7 @@ class NoteRepositoryTest {
         every { doc2.getString("datetime") } returns ""
         every { doc2.getString("location") } returns ""
         every { doc2.getLong("createdAt") } returns 250L
+        every { doc2.get("tags") } returns listOf("remote")
 
         every { doc3.getString("type") } returns "event"
         every { doc3.getString("text") } returns "meet"
@@ -104,7 +106,7 @@ class NoteRepositoryTest {
 
         val expected = listOf(
             StructuredNote.Event("meet", "2024-05-01", "office", createdAt = 300L),
-            StructuredNote.Memo("memo", createdAt = 200L),
+            StructuredNote.Memo("memo", tags = emptyList(), createdAt = 200L),
             StructuredNote.ToDo("task", status = "open", tags = listOf(), createdAt = 100L)
         )
 
@@ -112,14 +114,14 @@ class NoteRepositoryTest {
     }
 
     @Test
-    fun summaryToNotes_splitsAndTrimsMultilineText() {
+    fun summaryToNotes_mapsThoughtItems() {
         System.setProperty("net.bytebuddy.experimental", "true")
         val repo = NoteRepository(mockk(), createTempFile().toFile())
 
         val summary = MemoSummary(
             todo = "",
             appointments = "",
-            thoughts = " idea one \n idea two  \n",
+            thoughts = "",
             todoItems = listOf(
                 TodoItem("task one", "open", emptyList()),
                 TodoItem("task two", "done", listOf("tag"))
@@ -127,6 +129,10 @@ class NoteRepositoryTest {
             appointmentItems = listOf(
                 Appointment("meet Alice", "", ""),
                 Appointment("meet Bob", "", "")
+            ),
+            thoughtItems = listOf(
+                Thought("idea one", listOf("a")),
+                Thought("idea two", emptyList())
             )
         )
 
@@ -141,8 +147,8 @@ class NoteRepositoryTest {
             StructuredNote.ToDo("task two", status = "done", tags = listOf("tag"), createdAt = (result[1] as StructuredNote.ToDo).createdAt),
             StructuredNote.Event("meet Alice", "", "", createdAt = (result[2] as StructuredNote.Event).createdAt),
             StructuredNote.Event("meet Bob", "", "", createdAt = (result[3] as StructuredNote.Event).createdAt),
-            StructuredNote.Memo("idea one", createdAt = (result[4] as StructuredNote.Memo).createdAt),
-            StructuredNote.Memo("idea two", createdAt = (result[5] as StructuredNote.Memo).createdAt)
+            StructuredNote.Memo("idea one", tags = listOf("a"), createdAt = (result[4] as StructuredNote.Memo).createdAt),
+            StructuredNote.Memo("idea two", tags = emptyList(), createdAt = (result[5] as StructuredNote.Memo).createdAt)
         )
 
         assertEquals(expected, result)
@@ -160,9 +166,9 @@ class NoteRepositoryTest {
 
         val notes = listOf(
             StructuredNote.ToDo("task", status = "open", tags = listOf("x"), createdAt = 1L),
-            StructuredNote.Memo("memo", createdAt = 2L),
+            StructuredNote.Memo("memo", tags = listOf("t"), createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", "home", createdAt = 3L),
-            StructuredNote.Free("free", createdAt = 4L)
+            StructuredNote.Free("free", tags = listOf("z"), createdAt = 4L)
         )
 
         notes.forEach { note ->
@@ -185,6 +191,7 @@ class NoteRepositoryTest {
         is StructuredNote.Memo -> mapOf<String, Any>(
             "type" to "memo",
             "text" to note.text,
+            "tags" to note.tags,
             "datetime" to "",
             "location" to "",
             "createdAt" to note.createdAt
@@ -199,6 +206,7 @@ class NoteRepositoryTest {
         is StructuredNote.Free -> mapOf<String, Any>(
             "type" to "free",
             "text" to note.text,
+            "tags" to note.tags,
             "datetime" to "",
             "location" to "",
             "createdAt" to note.createdAt

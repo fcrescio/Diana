@@ -11,13 +11,14 @@ import androidx.compose.ui.res.stringResource
 import li.crescio.penates.diana.R
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.llm.Appointment
+import li.crescio.penates.diana.notes.StructuredNote
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 @Composable
 fun NotesListScreen(
     todoItems: List<TodoItem>,
     appointments: List<Appointment>,
-    thoughts: String,
+    notes: List<StructuredNote>,
     logs: List<String>,
     onRecord: () -> Unit,
     onViewRecordings: () -> Unit,
@@ -82,7 +83,42 @@ fun NotesListScreen(
             }
             item {
                 Text(stringResource(R.string.thoughts_notes))
-                Text(thoughts)
+                var filter by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    label = { Text(stringResource(R.string.filter_tag)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
+                Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                    notes.filter { note ->
+                        filter.isBlank() || when (note) {
+                            is StructuredNote.Memo -> note.tags.any { it.contains(filter, true) }
+                            is StructuredNote.Free -> note.tags.any { it.contains(filter, true) }
+                            else -> false
+                        }
+                    }.forEach { note ->
+                        val (text, tags) = when (note) {
+                            is StructuredNote.Memo -> note.text to note.tags
+                            is StructuredNote.Free -> note.text to note.tags
+                            else -> "" to emptyList()
+                        }
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(text)
+                            Row {
+                                tags.forEach { tag ->
+                                    AssistChip(
+                                        onClick = { filter = tag },
+                                        label = { Text(tag) },
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

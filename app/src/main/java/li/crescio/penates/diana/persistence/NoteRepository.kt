@@ -40,9 +40,15 @@ class NoteRepository(
                         val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                         StructuredNote.ToDo(it, status, tags, createdAt)
                     }
-                    "memo" -> text?.let { StructuredNote.Memo(it, createdAt) }
+                    "memo" -> text?.let {
+                        val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                        StructuredNote.Memo(it, tags, createdAt)
+                    }
                     "event" -> text?.let { StructuredNote.Event(it, datetime, location, createdAt) }
-                    "free" -> text?.let { StructuredNote.Free(it, createdAt) }
+                    "free" -> text?.let {
+                        val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                        StructuredNote.Free(it, tags, createdAt)
+                    }
                     else -> null
                 }
             }
@@ -78,6 +84,7 @@ class NoteRepository(
         is StructuredNote.Memo -> mapOf(
             "type" to "memo",
             "text" to note.text,
+            "tags" to note.tags,
             "datetime" to "",
             "location" to "",
             "createdAt" to note.createdAt
@@ -92,6 +99,7 @@ class NoteRepository(
         is StructuredNote.Free -> mapOf(
             "type" to "free",
             "text" to note.text,
+            "tags" to note.tags,
             "datetime" to "",
             "location" to "",
             "createdAt" to note.createdAt
@@ -113,9 +121,17 @@ class NoteRepository(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     StructuredNote.ToDo(text, status, tags, createdAt)
                 }
-                "memo" -> StructuredNote.Memo(text, createdAt)
+                "memo" -> {
+                    val tagsArr = obj.optJSONArray("tags")
+                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                    StructuredNote.Memo(text, tags, createdAt)
+                }
                 "event" -> StructuredNote.Event(text, datetime, location, createdAt)
-                "free" -> StructuredNote.Free(text, createdAt)
+                "free" -> {
+                    val tagsArr = obj.optJSONArray("tags")
+                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                    StructuredNote.Free(text, tags, createdAt)
+                }
                 else -> null
             }
         } catch (_: Exception) {
@@ -127,7 +143,7 @@ class NoteRepository(
         val notes = mutableListOf<StructuredNote>()
         notes += summary.todoItems.map { StructuredNote.ToDo(it.text, it.status, it.tags) }
         notes += summary.appointmentItems.map { StructuredNote.Event(it.text, it.datetime, it.location) }
-        notes += summary.thoughts.lines().filter { it.isNotBlank() }.map { StructuredNote.Memo(it.trim()) }
+        notes += summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
         return notes
     }
 }
