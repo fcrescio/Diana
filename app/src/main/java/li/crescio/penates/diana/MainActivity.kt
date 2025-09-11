@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.MemoProcessor
+import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.persistence.NoteRepository
@@ -83,6 +84,7 @@ fun DianaApp(repository: NoteRepository) {
     }
     val logger = remember { LlmLogger() }
     var todo by remember { mutableStateOf("") }
+    var todoItems by remember { mutableStateOf(listOf<TodoItem>()) }
     var appointments by remember { mutableStateOf("") }
     var thoughts by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -103,6 +105,7 @@ fun DianaApp(repository: NoteRepository) {
     LaunchedEffect(repository) {
         val notes = repository.loadNotes()
         todo = notes.filterIsInstance<StructuredNote.ToDo>().joinToString("\n") { it.text }
+        todoItems = notes.filterIsInstance<StructuredNote.ToDo>().map { TodoItem(it.text, it.status, it.tags) }
         appointments = notes.filterIsInstance<StructuredNote.Event>().joinToString("\n") { note ->
             if (note.datetime.isNotBlank()) "${note.datetime} ${note.text}" else note.text
         }
@@ -129,6 +132,7 @@ fun DianaApp(repository: NoteRepository) {
             try {
                 val summary = processor.process(memo)
                 todo = summary.todo
+                todoItems = summary.todoItems
                 appointments = summary.appointments
                 thoughts = summary.thoughts
                 repository.saveSummary(summary)
@@ -157,7 +161,7 @@ fun DianaApp(repository: NoteRepository) {
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) {
         when (screen) {
             Screen.List -> NotesListScreen(
-                todo,
+                todoItems,
                 appointments,
                 thoughts,
                 logs,

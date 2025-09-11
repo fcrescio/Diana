@@ -11,6 +11,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import li.crescio.penates.diana.llm.MemoSummary
+import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -36,7 +37,7 @@ class NoteRepositoryTest {
 
         val repo = NoteRepository(firestore, file)
         val notes = listOf(
-            StructuredNote.ToDo("task", createdAt = 1L),
+            StructuredNote.ToDo("task", status = "open", tags = listOf("home"), createdAt = 1L),
             StructuredNote.Memo("memo", createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", createdAt = 3L),
             StructuredNote.Free("free", createdAt = 4L)
@@ -60,7 +61,7 @@ class NoteRepositoryTest {
         val file = createTempFile().toFile()
 
         val localNotes = listOf(
-            StructuredNote.ToDo("task", createdAt = 100L),
+            StructuredNote.ToDo("task", status = "open", tags = listOf(), createdAt = 100L),
             StructuredNote.Memo("memo", createdAt = 200L)
         )
         file.writeText(localNotes.joinToString("\n") { JSONObject(expectedMap(it)).toString() })
@@ -79,6 +80,8 @@ class NoteRepositoryTest {
         every { doc1.getString("type") } returns "todo"
         every { doc1.getString("text") } returns "task"
         every { doc1.getString("datetime") } returns ""
+        every { doc1.getString("status") } returns "done"
+        every { doc1.get("tags") } returns listOf("work")
         every { doc1.getLong("createdAt") } returns 150L
 
         every { doc2.getString("type") } returns "memo"
@@ -98,7 +101,7 @@ class NoteRepositoryTest {
         val expected = listOf(
             StructuredNote.Event("meet", "2024-05-01", createdAt = 300L),
             StructuredNote.Memo("memo", createdAt = 200L),
-            StructuredNote.ToDo("task", createdAt = 100L)
+            StructuredNote.ToDo("task", status = "open", tags = listOf(), createdAt = 100L)
         )
 
         assertEquals(expected, result)
@@ -110,9 +113,13 @@ class NoteRepositoryTest {
         val repo = NoteRepository(mockk(), createTempFile().toFile())
 
         val summary = MemoSummary(
-            todo = " task one  \n\n task two \n",
+            todo = "",
             appointments = " meet Alice  \n \n meet Bob \n",
-            thoughts = " idea one \n idea two  \n"
+            thoughts = " idea one \n idea two  \n",
+            todoItems = listOf(
+                TodoItem("task one", "open", emptyList()),
+                TodoItem("task two", "done", listOf("tag"))
+            )
         )
 
         val method = NoteRepository::class.java
@@ -122,12 +129,12 @@ class NoteRepositoryTest {
         val result = method.invoke(repo, summary) as List<StructuredNote>
 
         val expected = listOf(
-            StructuredNote.ToDo("task one"),
-            StructuredNote.ToDo("task two"),
-            StructuredNote.Event("meet Alice", ""),
-            StructuredNote.Event("meet Bob", ""),
-            StructuredNote.Memo("idea one"),
-            StructuredNote.Memo("idea two")
+            StructuredNote.ToDo("task one", status = "open", tags = emptyList(), createdAt = (result[0] as StructuredNote.ToDo).createdAt),
+            StructuredNote.ToDo("task two", status = "done", tags = listOf("tag"), createdAt = (result[1] as StructuredNote.ToDo).createdAt),
+            StructuredNote.Event("meet Alice", "", createdAt = (result[2] as StructuredNote.Event).createdAt),
+            StructuredNote.Event("meet Bob", "", createdAt = (result[3] as StructuredNote.Event).createdAt),
+            StructuredNote.Memo("idea one", createdAt = (result[4] as StructuredNote.Memo).createdAt),
+            StructuredNote.Memo("idea two", createdAt = (result[5] as StructuredNote.Memo).createdAt)
         )
 
         assertEquals(expected, result)
@@ -144,7 +151,7 @@ class NoteRepositoryTest {
             .apply { isAccessible = true }
 
         val notes = listOf(
-            StructuredNote.ToDo("task", createdAt = 1L),
+            StructuredNote.ToDo("task", status = "open", tags = listOf("x"), createdAt = 1L),
             StructuredNote.Memo("memo", createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", createdAt = 3L),
             StructuredNote.Free("free", createdAt = 4L)
@@ -158,25 +165,27 @@ class NoteRepositoryTest {
     }
 
     private fun expectedMap(note: StructuredNote): Map<String, Any> = when (note) {
-        is StructuredNote.ToDo -> mapOf(
+        is StructuredNote.ToDo -> mapOf<String, Any>(
             "type" to "todo",
             "text" to note.text,
+            "status" to note.status,
+            "tags" to note.tags,
             "datetime" to "",
             "createdAt" to note.createdAt
         )
-        is StructuredNote.Memo -> mapOf(
+        is StructuredNote.Memo -> mapOf<String, Any>(
             "type" to "memo",
             "text" to note.text,
             "datetime" to "",
             "createdAt" to note.createdAt
         )
-        is StructuredNote.Event -> mapOf(
+        is StructuredNote.Event -> mapOf<String, Any>(
             "type" to "event",
             "text" to note.text,
             "datetime" to note.datetime,
             "createdAt" to note.createdAt
         )
-        is StructuredNote.Free -> mapOf(
+        is StructuredNote.Free -> mapOf<String, Any>(
             "type" to "free",
             "text" to note.text,
             "datetime" to "",
@@ -186,11 +195,16 @@ class NoteRepositoryTest {
 
     private fun lineToMap(line: String): Map<String, Any> {
         val obj = JSONObject(line)
-        return mapOf(
+        val map = mutableMapOf<String, Any>(
             "type" to obj.getString("type"),
             "text" to obj.getString("text"),
             "datetime" to obj.getString("datetime"),
             "createdAt" to obj.getLong("createdAt")
         )
+        obj.optString("status", null)?.let { map["status"] = it }
+        obj.optJSONArray("tags")?.let { arr ->
+            map["tags"] = (0 until arr.length()).map { arr.getString(it) }
+        }
+        return map
     }
 }

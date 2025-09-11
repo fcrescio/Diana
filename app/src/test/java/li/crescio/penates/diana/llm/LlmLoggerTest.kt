@@ -5,12 +5,18 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
+import io.mockk.every
+import io.mockk.mockkStatic
+import android.util.Log
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class LlmLoggerTest {
     @Test
     fun log_keepsLatestEntries_andEmitsThroughFlow() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        mockkStatic(Log::class)
+        every { Log.d(any(), any()) } returns 0
         val logger = LlmLogger(maxLogs = 2)
         val emitted = mutableListOf<String>()
         val job = launch {
