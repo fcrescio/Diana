@@ -2,17 +2,17 @@ package li.crescio.penates.diana.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import li.crescio.penates.diana.R
+import li.crescio.penates.diana.llm.TodoItem
 @Composable
 fun NotesListScreen(
-    todo: String,
+    todoItems: List<TodoItem>,
     appointments: String,
     thoughts: String,
     logs: List<String>,
@@ -41,7 +41,28 @@ fun NotesListScreen(
         ) {
             item {
                 Text(stringResource(R.string.todo_list))
-                Text(todo, modifier = Modifier.padding(bottom = 16.dp))
+                Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                    todoItems.forEach { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Checkbox(checked = item.status == "done", onCheckedChange = null)
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text(item.text)
+                                Row {
+                                    item.tags.forEach { tag ->
+                                        AssistChip(
+                                            onClick = {},
+                                            label = { Text(tag) },
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             item {
                 Text(stringResource(R.string.appointments))

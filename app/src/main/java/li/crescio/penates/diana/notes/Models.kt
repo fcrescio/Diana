@@ -14,6 +14,8 @@ data class Memo(
 sealed class StructuredNote(open val createdAt: Long) {
     data class ToDo(
         val text: String,
+        val status: String = "",
+        val tags: List<String> = emptyList(),
         override val createdAt: Long = System.currentTimeMillis()
     ) : StructuredNote(createdAt)
 

@@ -34,7 +34,11 @@ class NoteRepository(
                 val datetime = doc.getString("datetime") ?: ""
                 val createdAt = doc.getLong("createdAt") ?: 0L
                 when (type) {
-                    "todo" -> text?.let { StructuredNote.ToDo(it, createdAt) }
+                    "todo" -> text?.let {
+                        val status = doc.getString("status") ?: ""
+                        val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                        StructuredNote.ToDo(it, status, tags, createdAt)
+                    }
                     "memo" -> text?.let { StructuredNote.Memo(it, createdAt) }
                     "event" -> text?.let { StructuredNote.Event(it, datetime, createdAt) }
                     "free" -> text?.let { StructuredNote.Free(it, createdAt) }
@@ -64,6 +68,8 @@ class NoteRepository(
         is StructuredNote.ToDo -> mapOf(
             "type" to "todo",
             "text" to note.text,
+            "status" to note.status,
+            "tags" to note.tags,
             "datetime" to "",
             "createdAt" to note.createdAt
         )
@@ -95,7 +101,12 @@ class NoteRepository(
             val datetime = obj.optString("datetime", "")
             val createdAt = obj.optLong("createdAt", 0L)
             when (type) {
-                "todo" -> StructuredNote.ToDo(text, createdAt)
+                "todo" -> {
+                    val status = obj.optString("status", "")
+                    val tagsArr = obj.optJSONArray("tags")
+                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                    StructuredNote.ToDo(text, status, tags, createdAt)
+                }
                 "memo" -> StructuredNote.Memo(text, createdAt)
                 "event" -> StructuredNote.Event(text, datetime, createdAt)
                 "free" -> StructuredNote.Free(text, createdAt)
@@ -108,7 +119,7 @@ class NoteRepository(
 
     private fun summaryToNotes(summary: MemoSummary): List<StructuredNote> {
         val notes = mutableListOf<StructuredNote>()
-        notes += summary.todo.lines().filter { it.isNotBlank() }.map { StructuredNote.ToDo(it.trim()) }
+        notes += summary.todoItems.map { StructuredNote.ToDo(it.text, it.status, it.tags) }
         notes += summary.appointments.lines().filter { it.isNotBlank() }
             .map { StructuredNote.Event(it.trim(), "") }
         notes += summary.thoughts.lines().filter { it.isNotBlank() }.map { StructuredNote.Memo(it.trim()) }
