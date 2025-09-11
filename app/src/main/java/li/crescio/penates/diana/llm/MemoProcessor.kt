@@ -17,6 +17,7 @@ import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayDeque
+import android.util.Log
 
 /**
  * Maintains running text buffers for to-dos, appointments and free-form
@@ -149,8 +150,13 @@ class LlmLogger(private val maxLogs: Int = 100) {
     private val _logFlow = MutableSharedFlow<String>()
     val logFlow: SharedFlow<String> = _logFlow.asSharedFlow()
 
+    companion object {
+        private const val TAG = "LlmLogger"
+    }
+
     fun log(request: String, response: String) {
         val entry = "REQUEST: $request\nRESPONSE: $response"
+        Log.d(TAG, entry)
         if (logs.size == maxLogs) {
             logs.removeFirst()
         }
