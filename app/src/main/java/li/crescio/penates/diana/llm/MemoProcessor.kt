@@ -38,6 +38,7 @@ class MemoProcessor(
     private var todo: String = ""
     private var todoItems: List<TodoItem> = emptyList()
     private var appointments: String = ""
+    private var appointmentItems: List<Appointment> = emptyList()
     private var thoughts: String = ""
 
     private val prompts = Prompts.forLocale(locale)
@@ -49,13 +50,18 @@ class MemoProcessor(
         todo = updateBuffer(prompts.todo, todo, memo.text)
         appointments = updateBuffer(prompts.appointments, appointments, memo.text)
         thoughts = updateBuffer(prompts.thoughts, thoughts, memo.text)
-        return MemoSummary(todo, appointments, thoughts, todoItems)
+        return MemoSummary(todo, appointments, thoughts, todoItems, appointmentItems)
     }
 
     private suspend fun updateBuffer(aspect: String, prior: String, memo: String): String {
         val baseSchema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}"""
         val todoSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"status":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["text","status","tags"]}}},"required":["updated","items"]}"""
-        val schema = if (aspect == prompts.todo) todoSchema else baseSchema
+        val appointmentSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"datetime":{"type":"string"},"location":{"type":"string"}},"required":["text","datetime"]}}},"required":["updated","items"]}"""
+        val schema = when (aspect) {
+            prompts.todo -> todoSchema
+            prompts.appointments -> appointmentSchema
+            else -> baseSchema
+        }
         val system = prompts.systemTemplate.replace("{aspect}", aspect)
         val user = prompts.userTemplate
             .replace("{aspect}", aspect)
@@ -150,6 +156,15 @@ class MemoProcessor(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     if (text.isBlank()) null else TodoItem(text, status, tags)
                 }
+            } else if (aspect == prompts.appointments) {
+                val itemsArr = obj.optJSONArray("items")
+                appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                    val text = itemObj.optString("text")
+                    val datetime = itemObj.optString("datetime")
+                    val location = itemObj.optString("location")
+                    if (text.isBlank()) null else Appointment(text, datetime, location)
+                }
             }
             obj.optString("updated", prior)
         } catch (e: Exception) {
@@ -160,11 +175,14 @@ class MemoProcessor(
 
 data class TodoItem(val text: String, val status: String, val tags: List<String>)
 
+data class Appointment(val text: String, val datetime: String, val location: String)
+
 data class MemoSummary(
     val todo: String,
     val appointments: String,
     val thoughts: String,
-    val todoItems: List<TodoItem>
+    val todoItems: List<TodoItem>,
+    val appointmentItems: List<Appointment>
 )
 
 class LlmLogger(private val maxLogs: Int = 100) {

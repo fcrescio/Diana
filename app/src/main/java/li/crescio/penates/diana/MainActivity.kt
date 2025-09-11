@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.collect
 import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.llm.TodoItem
+import li.crescio.penates.diana.llm.Appointment
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.persistence.NoteRepository
@@ -85,7 +86,7 @@ fun DianaApp(repository: NoteRepository) {
     val logger = remember { LlmLogger() }
     var todo by remember { mutableStateOf("") }
     var todoItems by remember { mutableStateOf(listOf<TodoItem>()) }
-    var appointments by remember { mutableStateOf("") }
+    var appointments by remember { mutableStateOf(listOf<Appointment>()) }
     var thoughts by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val processor = remember { MemoProcessor(BuildConfig.OPENROUTER_API_KEY, logger, Locale.getDefault()) }
@@ -106,8 +107,8 @@ fun DianaApp(repository: NoteRepository) {
         val notes = repository.loadNotes()
         todo = notes.filterIsInstance<StructuredNote.ToDo>().joinToString("\n") { it.text }
         todoItems = notes.filterIsInstance<StructuredNote.ToDo>().map { TodoItem(it.text, it.status, it.tags) }
-        appointments = notes.filterIsInstance<StructuredNote.Event>().joinToString("\n") { note ->
-            if (note.datetime.isNotBlank()) "${note.datetime} ${note.text}" else note.text
+        appointments = notes.filterIsInstance<StructuredNote.Event>().map {
+            Appointment(it.text, it.datetime, it.location)
         }
         thoughts = notes.filter { it is StructuredNote.Memo || it is StructuredNote.Free }
             .joinToString("\n") {
@@ -133,7 +134,7 @@ fun DianaApp(repository: NoteRepository) {
                 val summary = processor.process(memo)
                 todo = summary.todo
                 todoItems = summary.todoItems
-                appointments = summary.appointments
+                appointments = summary.appointmentItems
                 thoughts = summary.thoughts
                 repository.saveSummary(summary)
                 screen = Screen.List
