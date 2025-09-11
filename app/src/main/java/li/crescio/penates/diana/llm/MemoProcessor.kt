@@ -52,7 +52,7 @@ class MemoProcessor(
     }
 
     private suspend fun updateBuffer(aspect: String, prior: String, memo: String): String {
-        val schema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}""""
+        val schema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}"""
         val system = prompts.systemTemplate.replace("{aspect}", aspect)
         val user = prompts.userTemplate
             .replace("{aspect}", aspect)
