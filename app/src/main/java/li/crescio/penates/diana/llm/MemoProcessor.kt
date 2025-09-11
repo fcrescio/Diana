@@ -40,6 +40,7 @@ class MemoProcessor(
     private var appointments: String = ""
     private var appointmentItems: List<Appointment> = emptyList()
     private var thoughts: String = ""
+    private var thoughtItems: List<Thought> = emptyList()
 
     private val prompts = Prompts.forLocale(locale)
 
@@ -50,16 +51,18 @@ class MemoProcessor(
         todo = updateBuffer(prompts.todo, todo, memo.text)
         appointments = updateBuffer(prompts.appointments, appointments, memo.text)
         thoughts = updateBuffer(prompts.thoughts, thoughts, memo.text)
-        return MemoSummary(todo, appointments, thoughts, todoItems, appointmentItems)
+        return MemoSummary(todo, appointments, thoughts, todoItems, appointmentItems, thoughtItems)
     }
 
     private suspend fun updateBuffer(aspect: String, prior: String, memo: String): String {
         val baseSchema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}"""
         val todoSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"status":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["text","status","tags"]}}},"required":["updated","items"]}"""
         val appointmentSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"datetime":{"type":"string"},"location":{"type":"string"}},"required":["text","datetime"]}}},"required":["updated","items"]}"""
+        val thoughtSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["text","tags"]}}},"required":["updated","items"]}"""
         val schema = when (aspect) {
             prompts.todo -> todoSchema
             prompts.appointments -> appointmentSchema
+            prompts.thoughts -> thoughtSchema
             else -> baseSchema
         }
         val system = prompts.systemTemplate.replace("{aspect}", aspect)
@@ -146,24 +149,35 @@ class MemoProcessor(
             ?: throw IOException("No JSON found")
         return try {
             val obj = JSONObject(jsonMatch.value)
-            if (aspect == prompts.todo) {
-                val itemsArr = obj.optJSONArray("items")
-                todoItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                    val text = itemObj.optString("text")
-                    val status = itemObj.optString("status")
-                    val tagsArr = itemObj.optJSONArray("tags")
-                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                    if (text.isBlank()) null else TodoItem(text, status, tags)
+            val itemsArr = obj.optJSONArray("items")
+            when (aspect) {
+                prompts.todo -> {
+                    todoItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                        val text = itemObj.optString("text")
+                        val status = itemObj.optString("status")
+                        val tagsArr = itemObj.optJSONArray("tags")
+                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                        if (text.isBlank()) null else TodoItem(text, status, tags)
+                    }
                 }
-            } else if (aspect == prompts.appointments) {
-                val itemsArr = obj.optJSONArray("items")
-                appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                    val text = itemObj.optString("text")
-                    val datetime = itemObj.optString("datetime")
-                    val location = itemObj.optString("location")
-                    if (text.isBlank()) null else Appointment(text, datetime, location)
+                prompts.appointments -> {
+                    appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                        val text = itemObj.optString("text")
+                        val datetime = itemObj.optString("datetime")
+                        val location = itemObj.optString("location")
+                        if (text.isBlank()) null else Appointment(text, datetime, location)
+                    }
+                }
+                prompts.thoughts -> {
+                    thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                        val text = itemObj.optString("text")
+                        val tagsArr = itemObj.optJSONArray("tags")
+                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                        if (text.isBlank()) null else Thought(text, tags)
+                    }
                 }
             }
             obj.optString("updated", prior)
@@ -182,8 +196,11 @@ data class MemoSummary(
     val appointments: String,
     val thoughts: String,
     val todoItems: List<TodoItem>,
-    val appointmentItems: List<Appointment>
+    val appointmentItems: List<Appointment>,
+    val thoughtItems: List<Thought>
 )
+
+data class Thought(val text: String, val tags: List<String>)
 
 class LlmLogger(private val maxLogs: Int = 100) {
     private val logs = ArrayDeque<String>()

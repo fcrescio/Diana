@@ -21,6 +21,7 @@ sealed class StructuredNote(open val createdAt: Long) {
 
     data class Memo(
         val text: String,
+        val tags: List<String> = emptyList(),
         override val createdAt: Long = System.currentTimeMillis()
     ) : StructuredNote(createdAt)
 
@@ -33,6 +34,7 @@ sealed class StructuredNote(open val createdAt: Long) {
 
     data class Free(
         val text: String,
+        val tags: List<String> = emptyList(),
         override val createdAt: Long = System.currentTimeMillis()
     ) : StructuredNote(createdAt)
 }

@@ -87,7 +87,7 @@ fun DianaApp(repository: NoteRepository) {
     var todo by remember { mutableStateOf("") }
     var todoItems by remember { mutableStateOf(listOf<TodoItem>()) }
     var appointments by remember { mutableStateOf(listOf<Appointment>()) }
-    var thoughts by remember { mutableStateOf("") }
+    var thoughtNotes by remember { mutableStateOf(listOf<StructuredNote>()) }
     val scope = rememberCoroutineScope()
     val processor = remember { MemoProcessor(BuildConfig.OPENROUTER_API_KEY, logger, Locale.getDefault()) }
     val player: Player = remember { AndroidPlayer() }
@@ -110,14 +110,7 @@ fun DianaApp(repository: NoteRepository) {
         appointments = notes.filterIsInstance<StructuredNote.Event>().map {
             Appointment(it.text, it.datetime, it.location)
         }
-        thoughts = notes.filter { it is StructuredNote.Memo || it is StructuredNote.Free }
-            .joinToString("\n") {
-                when (it) {
-                    is StructuredNote.Memo -> it.text
-                    is StructuredNote.Free -> it.text
-                    else -> ""
-                }
-            }
+        thoughtNotes = notes.filter { it is StructuredNote.Memo || it is StructuredNote.Free }
     }
 
     fun processMemo(memo: Memo) {
@@ -135,7 +128,7 @@ fun DianaApp(repository: NoteRepository) {
                 todo = summary.todo
                 todoItems = summary.todoItems
                 appointments = summary.appointmentItems
-                thoughts = summary.thoughts
+                thoughtNotes = summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
                 repository.saveSummary(summary)
                 screen = Screen.List
             } catch (e: IOException) {
@@ -164,7 +157,7 @@ fun DianaApp(repository: NoteRepository) {
             Screen.List -> NotesListScreen(
                 todoItems,
                 appointments,
-                thoughts,
+                thoughtNotes,
                 logs,
                 onRecord = { screen = Screen.Recorder },
                 onViewRecordings = { screen = Screen.Recordings },
