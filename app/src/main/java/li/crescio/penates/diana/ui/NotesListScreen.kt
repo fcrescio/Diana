@@ -10,10 +10,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import li.crescio.penates.diana.R
 import li.crescio.penates.diana.llm.TodoItem
+import li.crescio.penates.diana.llm.Appointment
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 @Composable
 fun NotesListScreen(
     todoItems: List<TodoItem>,
-    appointments: String,
+    appointments: List<Appointment>,
     thoughts: String,
     logs: List<String>,
     onRecord: () -> Unit,
@@ -66,7 +69,16 @@ fun NotesListScreen(
             }
             item {
                 Text(stringResource(R.string.appointments))
-                Text(appointments, modifier = Modifier.padding(bottom = 16.dp))
+                Column(modifier = Modifier.padding(bottom = 16.dp)) {
+                    appointments.sortedBy { it.datetime }.forEach { appt ->
+                        val formatted = runCatching {
+                            OffsetDateTime.parse(appt.datetime)
+                                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                        }.getOrElse { appt.datetime }
+                        val location = if (appt.location.isNotBlank()) " @ ${appt.location}" else ""
+                        Text("$formatted ${appt.text}$location")
+                    }
+                }
             }
             item {
                 Text(stringResource(R.string.thoughts_notes))

@@ -47,6 +47,7 @@ class MemoProcessorTest {
         assertEquals("todo updated", summary.todo)
         assertEquals("appointments updated", summary.appointments)
         assertEquals("thoughts updated", summary.thoughts)
+        assertTrue(summary.appointmentItems.isEmpty())
         verify(exactly = 3) { logger.log(any(), any()) }
 
         server.shutdown()

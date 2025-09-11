@@ -32,6 +32,7 @@ class NoteRepository(
                 val type = doc.getString("type")
                 val text = doc.getString("text")
                 val datetime = doc.getString("datetime") ?: ""
+                val location = doc.getString("location") ?: ""
                 val createdAt = doc.getLong("createdAt") ?: 0L
                 when (type) {
                     "todo" -> text?.let {
@@ -40,7 +41,7 @@ class NoteRepository(
                         StructuredNote.ToDo(it, status, tags, createdAt)
                     }
                     "memo" -> text?.let { StructuredNote.Memo(it, createdAt) }
-                    "event" -> text?.let { StructuredNote.Event(it, datetime, createdAt) }
+                    "event" -> text?.let { StructuredNote.Event(it, datetime, location, createdAt) }
                     "free" -> text?.let { StructuredNote.Free(it, createdAt) }
                     else -> null
                 }
@@ -56,7 +57,7 @@ class NoteRepository(
     private fun noteKey(note: StructuredNote): String = when (note) {
         is StructuredNote.ToDo -> "todo:${note.text}"
         is StructuredNote.Memo -> "memo:${note.text}"
-        is StructuredNote.Event -> "event:${note.text}|${note.datetime}"
+        is StructuredNote.Event -> "event:${note.text}|${note.datetime}|${note.location}"
         is StructuredNote.Free -> "free:${note.text}"
     }
 
@@ -71,24 +72,28 @@ class NoteRepository(
             "status" to note.status,
             "tags" to note.tags,
             "datetime" to "",
+            "location" to "",
             "createdAt" to note.createdAt
         )
         is StructuredNote.Memo -> mapOf(
             "type" to "memo",
             "text" to note.text,
             "datetime" to "",
+            "location" to "",
             "createdAt" to note.createdAt
         )
         is StructuredNote.Event -> mapOf(
             "type" to "event",
             "text" to note.text,
             "datetime" to note.datetime,
+            "location" to note.location,
             "createdAt" to note.createdAt
         )
         is StructuredNote.Free -> mapOf(
             "type" to "free",
             "text" to note.text,
             "datetime" to "",
+            "location" to "",
             "createdAt" to note.createdAt
         )
     }
@@ -99,6 +104,7 @@ class NoteRepository(
             val type = obj.getString("type")
             val text = obj.getString("text")
             val datetime = obj.optString("datetime", "")
+            val location = obj.optString("location", "")
             val createdAt = obj.optLong("createdAt", 0L)
             when (type) {
                 "todo" -> {
@@ -108,7 +114,7 @@ class NoteRepository(
                     StructuredNote.ToDo(text, status, tags, createdAt)
                 }
                 "memo" -> StructuredNote.Memo(text, createdAt)
-                "event" -> StructuredNote.Event(text, datetime, createdAt)
+                "event" -> StructuredNote.Event(text, datetime, location, createdAt)
                 "free" -> StructuredNote.Free(text, createdAt)
                 else -> null
             }
@@ -120,8 +126,7 @@ class NoteRepository(
     private fun summaryToNotes(summary: MemoSummary): List<StructuredNote> {
         val notes = mutableListOf<StructuredNote>()
         notes += summary.todoItems.map { StructuredNote.ToDo(it.text, it.status, it.tags) }
-        notes += summary.appointments.lines().filter { it.isNotBlank() }
-            .map { StructuredNote.Event(it.trim(), "") }
+        notes += summary.appointmentItems.map { StructuredNote.Event(it.text, it.datetime, it.location) }
         notes += summary.thoughts.lines().filter { it.isNotBlank() }.map { StructuredNote.Memo(it.trim()) }
         return notes
     }

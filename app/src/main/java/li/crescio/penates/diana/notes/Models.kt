@@ -27,6 +27,7 @@ sealed class StructuredNote(open val createdAt: Long) {
     data class Event(
         val text: String,
         val datetime: String,
+        val location: String = "",
         override val createdAt: Long = System.currentTimeMillis()
     ) : StructuredNote(createdAt)
 
