@@ -60,6 +60,40 @@ class NoteRepository(
         return combined.distinctBy { noteKey(it) }.sortedByDescending { it.createdAt }
     }
 
+    suspend fun clearTodos() = clearTypes("todo")
+
+    suspend fun clearAppointments() = clearTypes("event")
+
+    suspend fun clearThoughts() = clearTypes("memo", "free")
+
+    private suspend fun clearTypes(vararg types: String) {
+        if (file.exists()) {
+            val remaining = file.readLines().mapNotNull { parse(it) }.filterNot { note ->
+                when (note) {
+                    is StructuredNote.ToDo -> "todo" in types
+                    is StructuredNote.Event -> "event" in types
+                    is StructuredNote.Memo -> "memo" in types
+                    is StructuredNote.Free -> "free" in types
+                }
+            }
+            file.writeText(remaining.joinToString("\n") { toJson(it) })
+        }
+
+        for (type in types) {
+            try {
+                val snapshot = firestore.collection("notes")
+                    .whereEqualTo("type", type)
+                    .get()
+                    .await()
+                for (doc in snapshot.documents) {
+                    doc.reference.delete().await()
+                }
+            } catch (_: Exception) {
+                // ignore failures
+            }
+        }
+    }
+
     private fun noteKey(note: StructuredNote): String = when (note) {
         is StructuredNote.ToDo -> "todo:${note.text}"
         is StructuredNote.Memo -> "memo:${note.text}"

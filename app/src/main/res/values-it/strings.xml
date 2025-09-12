@@ -21,4 +21,7 @@
     <string name="log_transcription_failed">Trascrizione fallita</string>
     <string name="log_llm_failed">Elaborazione fallita</string>
     <string name="retry">Riprova</string>
+    <string name="clear_todo">Cancella attività</string>
+    <string name="clear_appointments">Cancella appuntamenti</string>
+    <string name="clear_thoughts">Cancella pensieri</string>
 </resources>

@@ -23,4 +23,7 @@
     <string name="log_llm_failed">Processing failed</string>
     <string name="retry">Retry</string>
     <string name="api_key_missing">OpenRouter API key missing. Memo processing disabled.</string>
+    <string name="clear_todo">Clear to-do list</string>
+    <string name="clear_appointments">Clear appointments</string>
+    <string name="clear_thoughts">Clear thoughts</string>
 </resources>

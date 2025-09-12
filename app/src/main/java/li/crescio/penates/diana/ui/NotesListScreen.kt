@@ -23,6 +23,7 @@ fun NotesListScreen(
     onRecord: () -> Unit,
     onViewRecordings: () -> Unit,
     onAddMemo: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -36,6 +37,8 @@ fun NotesListScreen(
             Button(onClick = onAddMemo) { Text(stringResource(R.string.text_memo)) }
             Spacer(modifier = Modifier.width(16.dp))
             Button(onClick = onViewRecordings) { Text(stringResource(R.string.view_recordings)) }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(onClick = onSettings) { Text(stringResource(R.string.settings)) }
         }
 
         LazyColumn(
