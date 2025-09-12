@@ -161,7 +161,8 @@ fun DianaApp(repository: NoteRepository) {
                 logs,
                 onRecord = { screen = Screen.Recorder },
                 onViewRecordings = { screen = Screen.Recordings },
-                onAddMemo = { screen = Screen.TextMemo }
+                onAddMemo = { screen = Screen.TextMemo },
+                onSettings = { screen = Screen.Settings }
             )
             Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
             Screen.Recorder -> RecorderScreen(
@@ -181,7 +182,28 @@ fun DianaApp(repository: NoteRepository) {
                 processMemo(memo)
             })
             Screen.Processing -> ProcessingScreen(processingText, logs)
-            Screen.Settings -> SettingsScreen()
+            Screen.Settings -> SettingsScreen(
+                onClearTodos = {
+                    scope.launch {
+                        repository.clearTodos()
+                        todo = ""
+                        todoItems = emptyList()
+                    }
+                },
+                onClearAppointments = {
+                    scope.launch {
+                        repository.clearAppointments()
+                        appointments = emptyList()
+                    }
+                },
+                onClearThoughts = {
+                    scope.launch {
+                        repository.clearThoughts()
+                        thoughtNotes = emptyList()
+                    }
+                },
+                onBack = { screen = Screen.List }
+            )
         }
     }
 }

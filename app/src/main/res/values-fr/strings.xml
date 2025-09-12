@@ -21,4 +21,7 @@
     <string name="log_transcription_failed">Échec de la transcription</string>
     <string name="log_llm_failed">Échec du traitement</string>
     <string name="retry">Réessayer</string>
+    <string name="clear_todo">Effacer les tâches</string>
+    <string name="clear_appointments">Effacer les rendez-vous</string>
+    <string name="clear_thoughts">Effacer les pensées</string>
 </resources>

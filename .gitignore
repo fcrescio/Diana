@@ -4,6 +4,7 @@ app/build/
 local.properties
 android-sdk/
 commandlinetools.zip
+android-commandlinetools.zip
 app/google-services.json
 # IntelliJ/Android Studio
 .idea/
