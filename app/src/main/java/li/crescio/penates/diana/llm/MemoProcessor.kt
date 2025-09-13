@@ -19,6 +19,12 @@ import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayDeque
 import android.util.Log
 
+private fun loadResource(path: String): String {
+    val stream = Thread.currentThread().contextClassLoader?.getResourceAsStream(path)
+        ?: throw IOException("Resource $path not found")
+    return stream.bufferedReader().use { it.readText() }
+}
+
 /**
  * Maintains running text buffers for to-dos, appointments and free-form
  * thoughts, updating each by calling an LLM with strict structured outputs.
@@ -27,7 +33,7 @@ class MemoProcessor(
     private val apiKey: String,
     private val logger: LlmLogger,
     locale: Locale,
-    private val baseUrl: String = "https://openrouter.ai/api/v1/chat/completions",
+    private val baseUrl: String = loadResource("llm/base_url.txt").trim(),
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -44,6 +50,12 @@ class MemoProcessor(
 
     private val prompts = Prompts.forLocale(locale)
 
+    private val requestTemplate = loadResource("llm/request.json")
+    private val baseSchema = loadResource("llm/schema/base.json")
+    private val todoSchema = loadResource("llm/schema/todo.json")
+    private val appointmentSchema = loadResource("llm/schema/appointment.json")
+    private val thoughtSchema = loadResource("llm/schema/thought.json")
+
     /**
      * Update the running summaries based on [memo] and return the latest values.
      */
@@ -55,10 +67,6 @@ class MemoProcessor(
     }
 
     private suspend fun updateBuffer(aspect: String, prior: String, memo: String): String {
-        val baseSchema = """{"type":"object","properties":{"updated":{"type":"string"}},"required":["updated"]}"""
-        val todoSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"status":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["text","status","tags"]}}},"required":["updated","items"]}"""
-        val appointmentSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"datetime":{"type":"string"},"location":{"type":"string"}},"required":["text","datetime"]}}},"required":["updated","items"]}"""
-        val thoughtSchema = """{"type":"object","properties":{"updated":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"required":["text","tags"]}}},"required":["updated","items"]}"""
         val schema = when (aspect) {
             prompts.todo -> todoSchema
             prompts.appointments -> appointmentSchema
@@ -70,25 +78,13 @@ class MemoProcessor(
             .replace("{aspect}", aspect)
             .replace("{prior}", prior)
             .replace("{memo}", memo)
-        val json = """
-            {
-              "model": "mistralai/mistral-nemo",
-              "messages": [
-                {"role":"system","content":"$system"},
-                {"role":"user","content":"$user"}
-              ],
-              "response_format": {
-                "type":"json_schema",
-                "json_schema":{
-                  "name":"update",
-                  "schema":$schema
-                }
-              }
-            }
-        """.trimIndent()
-
+        val json = requestTemplate
+            .replace("{system}", system)
+            .replace("{user}", user)
+            .replace("{schema}", schema)
+    
         if (apiKey.isBlank()) throw IOException("Missing API key")
-        check(json.contains("\"model\": \"mistralai/mistral-nemo\"")) { "Invalid model" }
+        check(json.contains("\"model\"")) { "Invalid model" }
         val schemaObject = try {
             JSONObject(schema)
         } catch (e: Exception) {
@@ -97,15 +93,17 @@ class MemoProcessor(
         val updatedProp = schemaObject.optJSONObject("properties")?.optJSONObject("updated")
         check(updatedProp?.optString("type") == "string") { "Schema 'updated' must be string" }
         val required = schemaObject.optJSONArray("required")
-        check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "updated" }) { "Schema missing 'updated'" }
-
+        check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "updated" }) {
+            "Schema missing 'updated'"
+        }
+    
         val requestBody = json.toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url(baseUrl)
             .header("Authorization", "Bearer $apiKey")
             .post(requestBody)
             .build()
-
+    
         var attempt = 0
         var responseText: String
         while (true) {
@@ -113,78 +111,79 @@ class MemoProcessor(
                 client.newCall(request).execute().use { response ->
                     Triple(response.code, response.message, response.body?.string().orEmpty())
                 }
-            }
-            responseText = body
-            logger.log(json, responseText)
-            if (code in 200..299) break
-            logger.log(json, "HTTP $code $message")
-            if (attempt >= 2) {
-                throw IOException("HTTP $code $message")
-            }
-            delay((1L shl attempt) * 1000L)
-            attempt++
         }
-
-        val messageObj = try {
-            JSONObject(responseText)
-                .optJSONArray("choices")
-                ?.optJSONObject(0)
-                ?.optJSONObject("message")
-        } catch (e: Exception) {
-            throw IOException("Invalid response", e)
-        } ?: throw IOException("Empty response")
-
-        val rawContent = when (val content = messageObj.opt("content")) {
-            is String -> content
-            is JSONArray -> buildString {
-                for (i in 0 until content.length()) {
-                    append(content.optJSONObject(i)?.optString("text").orEmpty())
-                }
-            }
-            else -> ""
+        responseText = body
+        logger.log(json, responseText)
+        if (code in 200..299) break
+        logger.log(json, "HTTP $code $message")
+        if (attempt >= 2) {
+            throw IOException("HTTP $code $message")
         }
-        if (rawContent.isBlank()) throw IOException("Blank content")
-
-        val jsonMatch = Regex("\\{.*\\}", RegexOption.DOT_MATCHES_ALL).find(rawContent)
-            ?: throw IOException("No JSON found")
-        return try {
-            val obj = JSONObject(jsonMatch.value)
-            val itemsArr = obj.optJSONArray("items")
-            when (aspect) {
-                prompts.todo -> {
-                    todoItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                        val text = itemObj.optString("text")
-                        val status = itemObj.optString("status")
-                        val tagsArr = itemObj.optJSONArray("tags")
-                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                        if (text.isBlank()) null else TodoItem(text, status, tags)
-                    }
-                }
-                prompts.appointments -> {
-                    appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                        val text = itemObj.optString("text")
-                        val datetime = itemObj.optString("datetime")
-                        val location = itemObj.optString("location")
-                        if (text.isBlank()) null else Appointment(text, datetime, location)
-                    }
-                }
-                prompts.thoughts -> {
-                    thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                        val text = itemObj.optString("text")
-                        val tagsArr = itemObj.optJSONArray("tags")
-                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                        if (text.isBlank()) null else Thought(text, tags)
-                    }
-                }
-            }
-            obj.optString("updated", prior)
-        } catch (e: Exception) {
-            throw IOException("Invalid JSON", e)
-        }
+        delay((1L shl attempt) * 1000L)
+        attempt++
     }
+
+    val messageObj = try {
+        JSONObject(responseText)
+            .optJSONArray("choices")
+            ?.optJSONObject(0)
+            ?.optJSONObject("message")
+    } catch (e: Exception) {
+        throw IOException("Invalid response", e)
+    } ?: throw IOException("Empty response")
+
+    val rawContent = when (val content = messageObj.opt("content")) {
+        is String -> content
+        is JSONArray -> buildString {
+            for (i in 0 until content.length()) {
+                append(content.optJSONObject(i)?.optString("text").orEmpty())
+            }
+        }
+        else -> ""
+    }
+    if (rawContent.isBlank()) throw IOException("Blank content")
+
+    val start = rawContent.indexOf('{')
+    val end = rawContent.lastIndexOf('}')
+    if (start == -1 || end == -1 || end <= start) throw IOException("No JSON found")
+    return try {
+        val obj = JSONObject(rawContent.substring(start, end + 1))
+        val itemsArr = obj.optJSONArray("items")
+        when (aspect) {
+            prompts.todo -> {
+                todoItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                    val text = itemObj.optString("text")
+                    val status = itemObj.optString("status")
+                    val tagsArr = itemObj.optJSONArray("tags")
+                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                    if (text.isBlank()) null else TodoItem(text, status, tags)
+                }
+            }
+            prompts.appointments -> {
+                appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                    val text = itemObj.optString("text")
+                    val datetime = itemObj.optString("datetime")
+                    val location = itemObj.optString("location")
+                    if (text.isBlank()) null else Appointment(text, datetime, location)
+                }
+            }
+            prompts.thoughts -> {
+                thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                    val text = itemObj.optString("text")
+                    val tagsArr = itemObj.optJSONArray("tags")
+                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                    if (text.isBlank()) null else Thought(text, tags)
+                }
+            }
+        }
+        obj.optString("updated", prior)
+    } catch (e: Exception) {
+        throw IOException("Invalid JSON", e)
+    }
+}
 }
 
 data class TodoItem(val text: String, val status: String, val tags: List<String>)

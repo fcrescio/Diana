@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "updated": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["text", "tags"]
+      }
+    }
+  },
+  "required": ["updated", "items"]
+}
