@@ -26,6 +26,7 @@ fun NotesListScreen(
     onViewRecordings: () -> Unit,
     onAddMemo: () -> Unit,
     onSettings: () -> Unit,
+    onTodoCheckedChange: (TodoItem, Boolean) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         FlowRow(
@@ -50,20 +51,37 @@ fun NotesListScreen(
                 Text(stringResource(R.string.todo_list))
                 Column(modifier = Modifier.padding(bottom = 16.dp)) {
                     todoItems.forEach { item ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
                         ) {
-                            Checkbox(checked = item.status == "done", onCheckedChange = null)
-                            Column(modifier = Modifier.padding(start = 8.dp)) {
-                                Text(item.text)
-                                Row {
-                                    item.tags.forEach { tag ->
-                                        AssistChip(
-                                            onClick = {},
-                                            label = { Text(tag) },
-                                            modifier = Modifier.padding(end = 4.dp)
-                                        )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                            ) {
+                                Checkbox(
+                                    checked = item.status == "done",
+                                    onCheckedChange = { checked ->
+                                        onTodoCheckedChange(item, checked)
+                                    }
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .weight(1f)
+                                ) {
+                                    Text(item.text)
+                                    Row {
+                                        item.tags.forEach { tag ->
+                                            AssistChip(
+                                                onClick = {},
+                                                label = { Text(tag) },
+                                                modifier = Modifier.padding(end = 4.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
