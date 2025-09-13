@@ -164,7 +164,7 @@ class MemoProcessor(
         val itemsArr = obj.optJSONArray("items")
         when (aspect) {
             prompts.todo -> {
-                todoItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                val newItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
                     val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
                     val text = itemObj.optString("text")
                     val status = itemObj.optString("status")
@@ -172,6 +172,11 @@ class MemoProcessor(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     if (text.isBlank()) null else TodoItem(text, status, tags)
                 }
+                val merged = todoItems.associateBy { it.text }.toMutableMap()
+                for (item in newItems) {
+                    merged[item.text] = item
+                }
+                todoItems = merged.values.toList()
             }
             prompts.appointments -> {
                 appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
