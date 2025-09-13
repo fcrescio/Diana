@@ -30,4 +30,6 @@
     <string name="cancel">Cancel</string>
     <string name="delete_todo_title">Delete to-do</string>
     <string name="delete_todo_message">Are you sure you want to delete this to-do?</string>
+    <string name="delete_appointment_title">Delete appointment</string>
+    <string name="delete_appointment_message">Are you sure you want to delete this appointment?</string>
 </resources>

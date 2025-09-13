@@ -28,4 +28,6 @@
     <string name="cancel">Annulla</string>
     <string name="delete_todo_title">Elimina attività</string>
     <string name="delete_todo_message">Sei sicuro di voler eliminare questa attività?</string>
+    <string name="delete_appointment_title">Elimina appuntamento</string>
+    <string name="delete_appointment_message">Sei sicuro di voler eliminare questo appuntamento?</string>
 </resources>

@@ -243,6 +243,12 @@ fun DianaApp(repository: NoteRepository) {
                     scope.launch {
                         repository.deleteTodoItem(item.text)
                     }
+                },
+                onAppointmentDelete = { appt ->
+                    appointments = appointments.filterNot { it == appt }
+                    scope.launch {
+                        repository.deleteAppointment(appt.text, appt.datetime, appt.location)
+                    }
                 }
             )
             Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }

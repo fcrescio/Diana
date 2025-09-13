@@ -87,6 +87,34 @@ class NoteRepository(
         }
     }
 
+    suspend fun deleteAppointment(text: String, datetime: String, location: String) {
+        if (file.exists()) {
+            val remaining = file.readLines().mapNotNull { parse(it) }
+                .filterNot { note ->
+                    note is StructuredNote.Event &&
+                        note.text == text &&
+                        note.datetime == datetime &&
+                        note.location == location
+                }
+            file.writeText(remaining.joinToString("\n") { toJson(it) })
+        }
+
+        try {
+            val snapshot = firestore.collection("notes")
+                .whereEqualTo("type", "event")
+                .whereEqualTo("text", text)
+                .whereEqualTo("datetime", datetime)
+                .whereEqualTo("location", location)
+                .get()
+                .await()
+            for (doc in snapshot.documents) {
+                doc.reference.delete().await()
+            }
+        } catch (_: Exception) {
+            // ignore failures
+        }
+    }
+
     private suspend fun clearTypes(vararg types: String) {
         if (file.exists()) {
             val remaining = file.readLines().mapNotNull { parse(it) }.filterNot { note ->
