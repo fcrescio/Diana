@@ -1,0 +1,14 @@
+{
+  "model": "mistralai/mistral-nemo",
+  "messages": [
+    {"role":"system","content":"{system}"},
+    {"role":"user","content":"{user}"}
+  ],
+  "response_format": {
+    "type":"json_schema",
+    "json_schema": {
+      "name":"update",
+      "schema": {schema}
+    }
+  }
+}

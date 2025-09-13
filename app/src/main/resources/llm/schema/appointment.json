@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "updated": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "datetime": { "type": "string" },
+          "location": { "type": "string" }
+        },
+        "required": ["text", "datetime"]
+      }
+    }
+  },
+  "required": ["updated", "items"]
+}
