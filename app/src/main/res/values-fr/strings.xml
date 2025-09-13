@@ -30,4 +30,7 @@
     <string name="delete_todo_message">Êtes-vous sûr de vouloir supprimer cette tâche ?</string>
     <string name="delete_appointment_title">Supprimer le rendez-vous</string>
     <string name="delete_appointment_message">Êtes-vous sûr de vouloir supprimer ce rendez-vous ?</string>
+    <string name="process_todo">Traiter les tâches</string>
+    <string name="process_appointments">Traiter les rendez-vous</string>
+    <string name="process_thoughts">Traiter les pensées</string>
 </resources>

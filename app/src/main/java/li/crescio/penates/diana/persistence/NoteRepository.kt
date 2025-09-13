@@ -18,8 +18,13 @@ class NoteRepository(
         }
     }
 
-    suspend fun saveSummary(summary: MemoSummary) {
-        saveNotes(summaryToNotes(summary))
+    suspend fun saveSummary(
+        summary: MemoSummary,
+        saveTodos: Boolean = true,
+        saveAppointments: Boolean = true,
+        saveThoughts: Boolean = true,
+    ) {
+        saveNotes(summaryToNotes(summary, saveTodos, saveAppointments, saveThoughts))
     }
 
     suspend fun loadNotes(): List<StructuredNote> {
@@ -222,11 +227,22 @@ class NoteRepository(
         }
     }
 
-    private fun summaryToNotes(summary: MemoSummary): List<StructuredNote> {
+    private fun summaryToNotes(
+        summary: MemoSummary,
+        saveTodos: Boolean,
+        saveAppointments: Boolean,
+        saveThoughts: Boolean,
+    ): List<StructuredNote> {
         val notes = mutableListOf<StructuredNote>()
-        notes += summary.todoItems.map { StructuredNote.ToDo(it.text, it.status, it.tags) }
-        notes += summary.appointmentItems.map { StructuredNote.Event(it.text, it.datetime, it.location) }
-        notes += summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
+        if (saveTodos) {
+            notes += summary.todoItems.map { StructuredNote.ToDo(it.text, it.status, it.tags) }
+        }
+        if (saveAppointments) {
+            notes += summary.appointmentItems.map { StructuredNote.Event(it.text, it.datetime, it.location) }
+        }
+        if (saveThoughts) {
+            notes += summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
+        }
         return notes
     }
 }
