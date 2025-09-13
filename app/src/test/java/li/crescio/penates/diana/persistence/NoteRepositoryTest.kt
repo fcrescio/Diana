@@ -211,6 +211,41 @@ class NoteRepositoryTest {
         verify { docRef.delete() }
     }
 
+    @Test
+    fun deleteAppointment_removesFromFileAndFirestore() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val file = createTempFile().toFile()
+        val appt1 = StructuredNote.Event("meet", "2024-05-01T10:00:00Z", "office", createdAt = 1L)
+        val appt2 = StructuredNote.Event("call", "2024-05-02T11:00:00Z", "home", createdAt = 2L)
+        val memo = StructuredNote.Memo("memo", tags = emptyList(), createdAt = 3L)
+        file.writeText(listOf(appt1, appt2, memo).joinToString("\n") { JSONObject(expectedMap(it)).toString() })
+
+        val firestore = mockk<FirebaseFirestore>()
+        val collection = mockk<CollectionReference>()
+        val querySnapshot = mockk<QuerySnapshot>()
+        val doc = mockk<DocumentSnapshot>()
+        val docRef = mockk<DocumentReference>()
+
+        every { firestore.collection("notes") } returns collection
+        every { collection.whereEqualTo("type", "event") } returns collection
+        every { collection.whereEqualTo("text", "meet") } returns collection
+        every { collection.whereEqualTo("datetime", "2024-05-01T10:00:00Z") } returns collection
+        every { collection.whereEqualTo("location", "office") } returns collection
+        every { collection.get() } returns Tasks.forResult(querySnapshot)
+        every { querySnapshot.documents } returns listOf(doc)
+        every { doc.reference } returns docRef
+        every { docRef.delete() } returns Tasks.forResult(null)
+
+        val repo = NoteRepository(firestore, file)
+
+        repo.deleteAppointment("meet", "2024-05-01T10:00:00Z", "office")
+
+        val remaining = file.readLines().map { lineToMap(it) }
+        val expected = listOf(expectedMap(appt2), expectedMap(memo))
+        assertEquals(expected, remaining)
+        verify { docRef.delete() }
+    }
+
     private fun expectedMap(note: StructuredNote): Map<String, Any> = when (note) {
         is StructuredNote.ToDo -> mapOf<String, Any>(
             "type" to "todo",

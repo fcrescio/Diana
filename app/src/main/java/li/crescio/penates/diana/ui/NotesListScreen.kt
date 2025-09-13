@@ -26,6 +26,7 @@ fun NotesListScreen(
     modifier: Modifier = Modifier,
     onTodoCheckedChange: (TodoItem, Boolean) -> Unit,
     onTodoDelete: (TodoItem) -> Unit,
+    onAppointmentDelete: (Appointment) -> Unit,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -114,13 +115,77 @@ fun NotesListScreen(
             item {
                 Text(stringResource(R.string.appointments))
                 Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                    appointments.sortedBy { it.datetime }.forEach { appt ->
-                        val formatted = runCatching {
-                            OffsetDateTime.parse(appt.datetime)
-                                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-                        }.getOrElse { appt.datetime }
-                        val location = if (appt.location.isNotBlank()) " @ ${appt.location}" else ""
-                        Text("$formatted ${appt.text}$location")
+                    val grouped = appointments.groupBy { appt ->
+                        runCatching { OffsetDateTime.parse(appt.datetime).toLocalDate().toString() }
+                            .getOrElse {
+                                if (appt.datetime.length >= 10) appt.datetime.substring(0, 10) else appt.datetime
+                            }
+                    }.toSortedMap()
+                    grouped.forEach { (date, appts) ->
+                        Text(date)
+                        appts.sortedBy { it.datetime }.forEach { appt ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                var expanded by remember { mutableStateOf(false) }
+                                var showConfirm by remember { mutableStateOf(false) }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 8.dp)
+                                    ) {
+                                        val time = runCatching {
+                                            OffsetDateTime.parse(appt.datetime)
+                                                .format(DateTimeFormatter.ofPattern("HH:mm"))
+                                        }.getOrElse { appt.datetime }
+                                        val location = if (appt.location.isNotBlank()) " @ ${appt.location}" else ""
+                                        Text("$time ${appt.text}$location")
+                                    }
+                                    Box {
+                                        IconButton(onClick = { expanded = true }) {
+                                            Icon(Icons.Filled.MoreVert, contentDescription = null)
+                                        }
+                                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.delete)) },
+                                                onClick = {
+                                                    expanded = false
+                                                    showConfirm = true
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                if (showConfirm) {
+                                    AlertDialog(
+                                        onDismissRequest = { showConfirm = false },
+                                        title = { Text(stringResource(R.string.delete_appointment_title)) },
+                                        text = { Text(stringResource(R.string.delete_appointment_message)) },
+                                        confirmButton = {
+                                            TextButton(onClick = {
+                                                onAppointmentDelete(appt)
+                                                showConfirm = false
+                                            }) {
+                                                Text(stringResource(R.string.delete))
+                                            }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = { showConfirm = false }) {
+                                                Text(stringResource(R.string.cancel))
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

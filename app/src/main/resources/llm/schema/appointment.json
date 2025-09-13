@@ -8,7 +8,7 @@
         "type": "object",
         "properties": {
           "text": { "type": "string" },
-          "datetime": { "type": "string" },
+          "datetime": { "type": "string", "minLength": 1 },
           "location": { "type": "string" }
         },
         "required": ["text", "datetime"]
