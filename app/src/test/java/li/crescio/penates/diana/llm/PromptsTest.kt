@@ -3,39 +3,42 @@ package li.crescio.penates.diana.llm
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.Locale
+import java.io.IOException
 
 class PromptsTest {
+    private fun load(path: String): String {
+        val stream = this::class.java.classLoader?.getResourceAsStream(path)
+            ?: throw IOException("Resource $path not found")
+        return stream.bufferedReader().use { it.readText().trim() }
+    }
     @Test
     fun forLocale_returnsItalianPrompts() {
         val prompts = Prompts.forLocale(Locale("it"))
-        assertEquals("lista di cose da fare", prompts.todo)
-        assertEquals("lista degli appuntamenti", prompts.appointments)
-        assertEquals("pensieri e note", prompts.thoughts)
-        assertEquals("Gestisci un documento {aspect}. Restituisci solo JSON.", prompts.systemTemplate)
-        val expectedUserTemplate = "Stato attuale della {aspect}:\n{prior}\n\nData odierna: {today}\n\nNuovo memo:\n{memo}\n\nRestituisci la {aspect} aggiornata nel campo 'updated', nella stessa lingua del nuovo memo."
-        assertEquals(expectedUserTemplate, prompts.userTemplate)
+        assertEquals(load("llm/prompts/it/todo.txt"), prompts.todo)
+        assertEquals(load("llm/prompts/it/appointments.txt"), prompts.appointments)
+        assertEquals(load("llm/prompts/it/thoughts.txt"), prompts.thoughts)
+        assertEquals(load("llm/prompts/it/system.txt"), prompts.systemTemplate)
+        assertEquals(load("llm/prompts/it/user.txt"), prompts.userTemplate)
     }
 
     @Test
     fun forLocale_returnsFrenchPrompts() {
         val prompts = Prompts.forLocale(Locale("fr"))
-        assertEquals("liste de tâches", prompts.todo)
-        assertEquals("liste des rendez-vous", prompts.appointments)
-        assertEquals("pensées et notes", prompts.thoughts)
-        assertEquals("Vous maintenez un document de {aspect}. Retournez uniquement du JSON.", prompts.systemTemplate)
-        val expectedUserTemplate = "État actuel de la {aspect}:\n{prior}\n\nDate du jour: {today}\n\nNouveau mémo:\n{memo}\n\nRetournez la {aspect} mise à jour dans le champ 'updated', dans la même langue que le nouveau mémo."
-        assertEquals(expectedUserTemplate, prompts.userTemplate)
+        assertEquals(load("llm/prompts/fr/todo.txt"), prompts.todo)
+        assertEquals(load("llm/prompts/fr/appointments.txt"), prompts.appointments)
+        assertEquals(load("llm/prompts/fr/thoughts.txt"), prompts.thoughts)
+        assertEquals(load("llm/prompts/fr/system.txt"), prompts.systemTemplate)
+        assertEquals(load("llm/prompts/fr/user.txt"), prompts.userTemplate)
     }
 
     @Test
     fun forLocale_returnsDefaultPrompts() {
         val prompts = Prompts.forLocale(Locale("en"))
-        assertEquals("to-do list", prompts.todo)
-        assertEquals("appointments list", prompts.appointments)
-        assertEquals("thoughts and notes", prompts.thoughts)
-        assertEquals("You maintain a {aspect} document. Return only JSON.", prompts.systemTemplate)
-        val expectedUserTemplate = "Current {aspect}:\n{prior}\n\nToday's date: {today}\n\nNew memo:\n{memo}\n\nReturn the updated {aspect} in the field 'updated', in the same language as the new memo."
-        assertEquals(expectedUserTemplate, prompts.userTemplate)
+        assertEquals(load("llm/prompts/en/todo.txt"), prompts.todo)
+        assertEquals(load("llm/prompts/en/appointments.txt"), prompts.appointments)
+        assertEquals(load("llm/prompts/en/thoughts.txt"), prompts.thoughts)
+        assertEquals(load("llm/prompts/en/system.txt"), prompts.systemTemplate)
+        assertEquals(load("llm/prompts/en/user.txt"), prompts.userTemplate)
     }
 }
 

@@ -1,0 +1,9 @@
+Current {aspect}:
+{prior}
+
+Today's date: {today}
+
+New memo:
+{memo}
+
+Return the updated {aspect} in the field 'updated', in the same language as the new memo.
