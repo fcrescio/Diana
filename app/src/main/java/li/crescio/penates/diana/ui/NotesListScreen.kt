@@ -1,6 +1,5 @@
 package li.crescio.penates.diana.ui
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -15,33 +14,17 @@ import li.crescio.penates.diana.llm.Appointment
 import li.crescio.penates.diana.notes.StructuredNote
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
-@OptIn(ExperimentalLayoutApi::class)
+
 @Composable
 fun NotesListScreen(
     todoItems: List<TodoItem>,
     appointments: List<Appointment>,
     notes: List<StructuredNote>,
     logs: List<String>,
-    onRecord: () -> Unit,
-    onViewRecordings: () -> Unit,
-    onAddMemo: () -> Unit,
-    onSettings: () -> Unit,
+    modifier: Modifier = Modifier,
     onTodoCheckedChange: (TodoItem, Boolean) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        FlowRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Button(onClick = onRecord) { Text(stringResource(R.string.record)) }
-            Button(onClick = onAddMemo) { Text(stringResource(R.string.text_memo)) }
-            Button(onClick = onViewRecordings) { Text(stringResource(R.string.view_recordings)) }
-            Button(onClick = onSettings) { Text(stringResource(R.string.settings)) }
-        }
-
+    Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .weight(1f)

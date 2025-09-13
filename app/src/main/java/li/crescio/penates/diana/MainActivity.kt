@@ -10,7 +10,18 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.padding
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -152,17 +163,66 @@ fun DianaApp(repository: NoteRepository) {
         }
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (screen == Screen.List) {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = { screen = Screen.Recorder },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Mic,
+                                contentDescription = stringResource(R.string.record)
+                            )
+                        },
+                        label = { Text(stringResource(R.string.record)) }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = { screen = Screen.TextMemo },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = stringResource(R.string.text_memo)
+                            )
+                        },
+                        label = { Text(stringResource(R.string.text_memo)) }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = { screen = Screen.Recordings },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.LibraryMusic,
+                                contentDescription = stringResource(R.string.view_recordings)
+                            )
+                        },
+                        label = { Text(stringResource(R.string.view_recordings)) }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = { screen = Screen.Settings },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = stringResource(R.string.settings)
+                            )
+                        },
+                        label = { Text(stringResource(R.string.settings)) }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
         when (screen) {
             Screen.List -> NotesListScreen(
                 todoItems,
                 appointments,
                 thoughtNotes,
                 logs,
-                onRecord = { screen = Screen.Recorder },
-                onViewRecordings = { screen = Screen.Recordings },
-                onAddMemo = { screen = Screen.TextMemo },
-                onSettings = { screen = Screen.Settings },
+                modifier = Modifier.padding(innerPadding),
                 onTodoCheckedChange = { item, checked ->
                     val newStatus = if (checked) "done" else "open"
                     todoItems = todoItems.map {
