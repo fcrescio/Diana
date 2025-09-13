@@ -162,7 +162,22 @@ fun DianaApp(repository: NoteRepository) {
                 onRecord = { screen = Screen.Recorder },
                 onViewRecordings = { screen = Screen.Recordings },
                 onAddMemo = { screen = Screen.TextMemo },
-                onSettings = { screen = Screen.Settings }
+                onSettings = { screen = Screen.Settings },
+                onTodoCheckedChange = { item, checked ->
+                    val newStatus = if (checked) "done" else "open"
+                    todoItems = todoItems.map {
+                        if (it.text == item.text) it.copy(status = newStatus) else it
+                    }
+                    scope.launch {
+                        val todoNotes = todoItems.map {
+                            StructuredNote.ToDo(it.text, it.status, it.tags)
+                        }
+                        val apptNotes = appointments.map {
+                            StructuredNote.Event(it.text, it.datetime, it.location)
+                        }
+                        repository.saveNotes(todoNotes + apptNotes + thoughtNotes)
+                    }
+                }
             )
             Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
             Screen.Recorder -> RecorderScreen(
