@@ -21,7 +21,9 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.padding
+import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -109,6 +111,11 @@ fun DianaApp(repository: NoteRepository) {
     val retryLabel = stringResource(R.string.retry)
     val logApiKeyMissing = stringResource(R.string.api_key_missing)
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    var processTodos by remember { mutableStateOf(prefs.getBoolean("process_todos", true)) }
+    var processAppointments by remember { mutableStateOf(prefs.getBoolean("process_appointments", true)) }
+    var processThoughts by remember { mutableStateOf(prefs.getBoolean("process_thoughts", true)) }
 
     LaunchedEffect(logger) {
         logger.logFlow.collect { addLog(it) }
@@ -135,12 +142,18 @@ fun DianaApp(repository: NoteRepository) {
         }
         scope.launch {
             try {
-                val summary = processor.process(memo)
-                todo = summary.todo
-                todoItems = summary.todoItems
-                appointments = summary.appointmentItems
-                thoughtNotes = summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
-                repository.saveSummary(summary)
+                val summary = processor.process(memo, processTodos, processAppointments, processThoughts)
+                if (processTodos) {
+                    todo = summary.todo
+                    todoItems = summary.todoItems
+                }
+                if (processAppointments) {
+                    appointments = summary.appointmentItems
+                }
+                if (processThoughts) {
+                    thoughtNotes = summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
+                }
+                repository.saveSummary(summary, processTodos, processAppointments, processThoughts)
                 screen = Screen.List
             } catch (e: IOException) {
                 Log.e("DianaApp", "Error processing memo: ${e.message}", e)
@@ -222,6 +235,9 @@ fun DianaApp(repository: NoteRepository) {
                 appointments,
                 thoughtNotes,
                 logs,
+                processTodos,
+                processAppointments,
+                processThoughts,
                 modifier = Modifier.padding(innerPadding),
                 onTodoCheckedChange = { item, checked ->
                     val newStatus = if (checked) "done" else "open"
@@ -232,10 +248,13 @@ fun DianaApp(repository: NoteRepository) {
                         val todoNotes = todoItems.map {
                             StructuredNote.ToDo(it.text, it.status, it.tags)
                         }
-                        val apptNotes = appointments.map {
-                            StructuredNote.Event(it.text, it.datetime, it.location)
-                        }
-                        repository.saveNotes(todoNotes + apptNotes + thoughtNotes)
+                        val apptNotes = if (processAppointments) {
+                            appointments.map {
+                                StructuredNote.Event(it.text, it.datetime, it.location)
+                            }
+                        } else emptyList()
+                        val thoughtNoteList = if (processThoughts) thoughtNotes else emptyList()
+                        repository.saveNotes(todoNotes + apptNotes + thoughtNoteList)
                     }
                 },
                 onTodoDelete = { item ->
@@ -270,6 +289,21 @@ fun DianaApp(repository: NoteRepository) {
             })
             Screen.Processing -> ProcessingScreen(processingText, logs)
             Screen.Settings -> SettingsScreen(
+                processTodos = processTodos,
+                processAppointments = processAppointments,
+                processThoughts = processThoughts,
+                onProcessTodosChange = { enabled ->
+                    processTodos = enabled
+                    prefs.edit().putBoolean("process_todos", enabled).apply()
+                },
+                onProcessAppointmentsChange = { enabled ->
+                    processAppointments = enabled
+                    prefs.edit().putBoolean("process_appointments", enabled).apply()
+                },
+                onProcessThoughtsChange = { enabled ->
+                    processThoughts = enabled
+                    prefs.edit().putBoolean("process_thoughts", enabled).apply()
+                },
                 onClearTodos = {
                     scope.launch {
                         repository.clearTodos()

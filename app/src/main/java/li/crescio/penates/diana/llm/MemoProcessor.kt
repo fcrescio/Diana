@@ -60,10 +60,21 @@ class MemoProcessor(
     /**
      * Update the running summaries based on [memo] and return the latest values.
      */
-    suspend fun process(memo: Memo): MemoSummary {
-        todo = updateBuffer(prompts.todo, todo, memo.text)
-        appointments = updateBuffer(prompts.appointments, appointments, memo.text)
-        thoughts = updateBuffer(prompts.thoughts, thoughts, memo.text)
+    suspend fun process(
+        memo: Memo,
+        processTodos: Boolean = true,
+        processAppointments: Boolean = true,
+        processThoughts: Boolean = true,
+    ): MemoSummary {
+        if (processTodos) {
+            todo = updateBuffer(prompts.todo, todo, memo.text)
+        }
+        if (processAppointments) {
+            appointments = updateBuffer(prompts.appointments, appointments, memo.text)
+        }
+        if (processThoughts) {
+            thoughts = updateBuffer(prompts.thoughts, thoughts, memo.text)
+        }
         return MemoSummary(todo, appointments, thoughts, todoItems, appointmentItems, thoughtItems)
     }
 

@@ -30,4 +30,7 @@
     <string name="delete_todo_message">Sei sicuro di voler eliminare questa attività?</string>
     <string name="delete_appointment_title">Elimina appuntamento</string>
     <string name="delete_appointment_message">Sei sicuro di voler eliminare questo appuntamento?</string>
+    <string name="process_todo">Elabora attività</string>
+    <string name="process_appointments">Elabora appuntamenti</string>
+    <string name="process_thoughts">Elabora pensieri</string>
 </resources>

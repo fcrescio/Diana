@@ -2,6 +2,7 @@ package li.crescio.penates.diana.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -12,10 +13,16 @@ import li.crescio.penates.diana.R
 
 @Composable
 fun SettingsScreen(
+    processTodos: Boolean,
+    processAppointments: Boolean,
+    processThoughts: Boolean,
+    onProcessTodosChange: (Boolean) -> Unit,
+    onProcessAppointmentsChange: (Boolean) -> Unit,
+    onProcessThoughtsChange: (Boolean) -> Unit,
     onClearTodos: () -> Unit,
     onClearAppointments: () -> Unit,
     onClearThoughts: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -32,20 +39,48 @@ fun SettingsScreen(
                 .weight(1f)
                 .padding(horizontal = 16.dp)
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.process_todo))
+                Spacer(modifier = Modifier.weight(1f))
+                Switch(checked = processTodos, onCheckedChange = onProcessTodosChange)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.process_appointments))
+                Spacer(modifier = Modifier.weight(1f))
+                Switch(checked = processAppointments, onCheckedChange = onProcessAppointmentsChange)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.process_thoughts))
+                Spacer(modifier = Modifier.weight(1f))
+                Switch(checked = processThoughts, onCheckedChange = onProcessThoughtsChange)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onClearTodos,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.clear_todo)) }
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = onClearAppointments,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.clear_appointments)) }
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = onClearThoughts,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.clear_thoughts)) }
         }
     }
 }
+
