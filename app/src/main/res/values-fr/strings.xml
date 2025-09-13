@@ -24,4 +24,8 @@
     <string name="clear_todo">Effacer les tâches</string>
     <string name="clear_appointments">Effacer les rendez-vous</string>
     <string name="clear_thoughts">Effacer les pensées</string>
+    <string name="delete">Supprimer</string>
+    <string name="cancel">Annuler</string>
+    <string name="delete_todo_title">Supprimer la tâche</string>
+    <string name="delete_todo_message">Êtes-vous sûr de vouloir supprimer cette tâche ?</string>
 </resources>

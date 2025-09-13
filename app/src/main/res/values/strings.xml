@@ -26,4 +26,8 @@
     <string name="clear_todo">Clear to-do list</string>
     <string name="clear_appointments">Clear appointments</string>
     <string name="clear_thoughts">Clear thoughts</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_todo_title">Delete to-do</string>
+    <string name="delete_todo_message">Are you sure you want to delete this to-do?</string>
 </resources>

@@ -178,6 +178,39 @@ class NoteRepositoryTest {
         }
     }
 
+    @Test
+    fun deleteTodoItem_removesFromFileAndFirestore() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val file = createTempFile().toFile()
+        val todo1 = StructuredNote.ToDo("task1", status = "open", tags = emptyList(), createdAt = 1L)
+        val todo2 = StructuredNote.ToDo("task2", status = "open", tags = emptyList(), createdAt = 2L)
+        val memo = StructuredNote.Memo("memo", tags = emptyList(), createdAt = 3L)
+        file.writeText(listOf(todo1, todo2, memo).joinToString("\n") { JSONObject(expectedMap(it)).toString() })
+
+        val firestore = mockk<FirebaseFirestore>()
+        val collection = mockk<CollectionReference>()
+        val querySnapshot = mockk<QuerySnapshot>()
+        val doc = mockk<DocumentSnapshot>()
+        val docRef = mockk<DocumentReference>()
+
+        every { firestore.collection("notes") } returns collection
+        every { collection.whereEqualTo("type", "todo") } returns collection
+        every { collection.whereEqualTo("text", "task1") } returns collection
+        every { collection.get() } returns Tasks.forResult(querySnapshot)
+        every { querySnapshot.documents } returns listOf(doc)
+        every { doc.reference } returns docRef
+        every { docRef.delete() } returns Tasks.forResult(null)
+
+        val repo = NoteRepository(firestore, file)
+
+        repo.deleteTodoItem("task1")
+
+        val remaining = file.readLines().map { lineToMap(it) }
+        val expected = listOf(expectedMap(todo2), expectedMap(memo))
+        assertEquals(expected, remaining)
+        verify { docRef.delete() }
+    }
+
     private fun expectedMap(note: StructuredNote): Map<String, Any> = when (note) {
         is StructuredNote.ToDo -> mapOf<String, Any>(
             "type" to "todo",
