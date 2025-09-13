@@ -24,4 +24,8 @@
     <string name="clear_todo">Cancella attività</string>
     <string name="clear_appointments">Cancella appuntamenti</string>
     <string name="clear_thoughts">Cancella pensieri</string>
+    <string name="delete">Elimina</string>
+    <string name="cancel">Annulla</string>
+    <string name="delete_todo_title">Elimina attività</string>
+    <string name="delete_todo_message">Sei sicuro di voler eliminare questa attività?</string>
 </resources>

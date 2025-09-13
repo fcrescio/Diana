@@ -237,6 +237,12 @@ fun DianaApp(repository: NoteRepository) {
                         }
                         repository.saveNotes(todoNotes + apptNotes + thoughtNotes)
                     }
+                },
+                onTodoDelete = { item ->
+                    todoItems = todoItems.filterNot { it.text == item.text }
+                    scope.launch {
+                        repository.deleteTodoItem(item.text)
+                    }
                 }
             )
             Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }

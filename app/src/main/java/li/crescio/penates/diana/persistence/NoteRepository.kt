@@ -66,6 +66,27 @@ class NoteRepository(
 
     suspend fun clearThoughts() = clearTypes("memo", "free")
 
+    suspend fun deleteTodoItem(text: String) {
+        if (file.exists()) {
+            val remaining = file.readLines().mapNotNull { parse(it) }
+                .filterNot { note -> note is StructuredNote.ToDo && note.text == text }
+            file.writeText(remaining.joinToString("\n") { toJson(it) })
+        }
+
+        try {
+            val snapshot = firestore.collection("notes")
+                .whereEqualTo("type", "todo")
+                .whereEqualTo("text", text)
+                .get()
+                .await()
+            for (doc in snapshot.documents) {
+                doc.reference.delete().await()
+            }
+        } catch (_: Exception) {
+            // ignore failures
+        }
+    }
+
     private suspend fun clearTypes(vararg types: String) {
         if (file.exists()) {
             val remaining = file.readLines().mapNotNull { parse(it) }.filterNot { note ->
