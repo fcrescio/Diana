@@ -105,7 +105,7 @@ class MemoProcessor(
             .replace("{system}", system)
             .replace("{user}", user)
             .replace("{schema}", schema)
-    
+
         if (apiKey.isBlank()) throw IOException("Missing API key")
         check(json.contains("\"model\"")) { "Invalid model" }
         val schemaObject = try {
@@ -113,11 +113,20 @@ class MemoProcessor(
         } catch (e: Exception) {
             throw IOException("Invalid JSON schema", e)
         }
-        val updatedProp = schemaObject.optJSONObject("properties")?.optJSONObject("updated")
-        check(updatedProp?.optString("type") == "string") { "Schema 'updated' must be string" }
-        val required = schemaObject.optJSONArray("required")
-        check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "updated" }) {
-            "Schema missing 'updated'"
+        val innerSchema = schemaObject.optJSONObject("schema") ?: schemaObject
+        val required = innerSchema.optJSONArray("required")
+        if (aspect == prompts.todo) {
+            val itemsProp = innerSchema.optJSONObject("properties")?.optJSONObject("items")
+            check(itemsProp?.optString("type") == "array") { "Schema 'items' must be array" }
+            check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "items" }) {
+                "Schema missing 'items'"
+            }
+        } else {
+            val updatedProp = innerSchema.optJSONObject("properties")?.optJSONObject("updated")
+            check(updatedProp?.optString("type") == "string") { "Schema 'updated' must be string" }
+            check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "updated" }) {
+                "Schema missing 'updated'"
+            }
         }
     
         val requestBody = json.toRequestBody("application/json".toMediaType())
@@ -187,6 +196,7 @@ class MemoProcessor(
                     merged[item.text] = item
                 }
                 todoItems = merged.values.toList()
+                todoItems.joinToString("\n") { it.text }
             }
             prompts.appointments -> {
                 appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
@@ -196,6 +206,7 @@ class MemoProcessor(
                     val location = itemObj.optString("location")
                     if (text.isBlank()) null else Appointment(text, datetime, location)
                 }
+                obj.optString("updated", prior)
             }
             prompts.thoughts -> {
                 thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
@@ -205,9 +216,10 @@ class MemoProcessor(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     if (text.isBlank()) null else Thought(text, tags)
                 }
+                obj.optString("updated", prior)
             }
+            else -> obj.optString("updated", prior)
         }
-        obj.optString("updated", prior)
     } catch (e: Exception) {
         throw IOException("Invalid JSON", e)
     }

@@ -23,13 +23,26 @@ class MemoProcessorTest {
         System.setProperty("net.bytebuddy.experimental", "true")
 
         val server = MockWebServer()
+        fun completionTodo(vararg items: JSONObject): String {
+            val itemsArr = JSONArray()
+            items.forEach { itemsArr.put(it) }
+            val content = JSONObject()
+                .put("date", "2024-01-01")
+                .put("action", "add")
+                .put("items", itemsArr)
+            val message = JSONObject().put("content", content.toString())
+            val choice = JSONObject().put("message", message)
+            val choices = JSONArray().put(choice)
+            return JSONObject().put("choices", choices).toString()
+        }
         fun completion(updated: String): String {
             val message = JSONObject().put("content", "{\"updated\":\"$updated\"}")
             val choice = JSONObject().put("message", message)
             val choices = JSONArray().put(choice)
             return JSONObject().put("choices", choices).toString()
         }
-        server.enqueue(MockResponse().setBody(completion("todo updated")).setResponseCode(200))
+        val todoItem = JSONObject().put("text", "todo updated").put("status", "not_started").put("tags", JSONArray())
+        server.enqueue(MockResponse().setBody(completionTodo(todoItem)).setResponseCode(200))
         server.enqueue(MockResponse().setBody(completion("appointments updated")).setResponseCode(200))
         server.enqueue(MockResponse().setBody(completion("thoughts updated")).setResponseCode(200))
         server.start()
@@ -62,13 +75,16 @@ class MemoProcessorTest {
         fun completion(vararg items: JSONObject): String {
             val itemsArr = JSONArray()
             items.forEach { itemsArr.put(it) }
-            val content = JSONObject().put("updated", "u").put("items", itemsArr)
+            val content = JSONObject()
+                .put("date", "2024-01-01")
+                .put("action", "add")
+                .put("items", itemsArr)
             val message = JSONObject().put("content", content.toString())
             val choice = JSONObject().put("message", message)
             val choices = JSONArray().put(choice)
             return JSONObject().put("choices", choices).toString()
         }
-        val item2 = JSONObject().put("text", "second").put("status", "").put("tags", JSONArray())
+        val item2 = JSONObject().put("text", "second").put("status", "not_started").put("tags", JSONArray())
         server.enqueue(MockResponse().setBody(completion(item2)).setResponseCode(200))
         server.start()
 
@@ -84,7 +100,7 @@ class MemoProcessorTest {
             todo = "first",
             appointments = "",
             thoughts = "",
-            todoItems = listOf(TodoItem("first", "", emptyList())),
+            todoItems = listOf(TodoItem("first", "not_started", emptyList())),
             appointmentItems = emptyList(),
             thoughtItems = emptyList()
         )
@@ -98,8 +114,8 @@ class MemoProcessorTest {
 
         assertEquals(
             listOf(
-                TodoItem("first", "", emptyList()),
-                TodoItem("second", "", emptyList())
+                TodoItem("first", "not_started", emptyList()),
+                TodoItem("second", "not_started", emptyList())
             ),
             summary.todoItems
         )
@@ -115,14 +131,17 @@ class MemoProcessorTest {
         fun completion(vararg items: JSONObject): String {
             val itemsArr = JSONArray()
             items.forEach { itemsArr.put(it) }
-            val content = JSONObject().put("updated", "u").put("items", itemsArr)
+            val content = JSONObject()
+                .put("date", "2024-01-01")
+                .put("action", "add")
+                .put("items", itemsArr)
             val message = JSONObject().put("content", content.toString())
             val choice = JSONObject().put("message", message)
             val choices = JSONArray().put(choice)
             return JSONObject().put("choices", choices).toString()
         }
-        val item1 = JSONObject().put("text", "first").put("status", "").put("tags", JSONArray())
-        val item2 = JSONObject().put("text", "second").put("status", "").put("tags", JSONArray())
+        val item1 = JSONObject().put("text", "first").put("status", "not_started").put("tags", JSONArray())
+        val item2 = JSONObject().put("text", "second").put("status", "not_started").put("tags", JSONArray())
         server.enqueue(MockResponse().setBody(completion(item1)).setResponseCode(200))
         server.enqueue(MockResponse().setBody(completion(item2)).setResponseCode(200))
         server.start()
@@ -140,8 +159,8 @@ class MemoProcessorTest {
 
         assertEquals(
             listOf(
-                TodoItem("first", "", emptyList()),
-                TodoItem("second", "", emptyList())
+                TodoItem("first", "not_started", emptyList()),
+                TodoItem("second", "not_started", emptyList())
             ),
             summary.todoItems
         )
