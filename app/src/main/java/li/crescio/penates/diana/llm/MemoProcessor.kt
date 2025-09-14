@@ -13,6 +13,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import com.fasterxml.jackson.core.io.JsonStringEncoder
 import java.io.IOException
 import java.util.Locale
 import java.time.LocalDate
@@ -52,6 +53,7 @@ class MemoProcessor(
     private val prompts = Prompts.forLocale(locale)
 
     private val requestTemplate = loadResource("llm/request.json")
+
     private val baseSchema = loadResource("llm/schema/base.json")
     private val todoSchema = loadResource("llm/schema/todo.json")
     private val appointmentSchema = loadResource("llm/schema/appointment.json")
@@ -101,7 +103,7 @@ class MemoProcessor(
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
-        return obj.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        return obj.toString()
     }
 
     private fun appointmentPriorJson(): String {
@@ -116,7 +118,7 @@ class MemoProcessor(
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
-        return obj.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        return obj.toString()
     }
 
     private fun thoughtPriorJson(): String {
@@ -132,7 +134,17 @@ class MemoProcessor(
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
-        return obj.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+        return obj.toString()
+    }
+
+    private fun buildRequest(system: String, user: String, schema: String): String {
+        val encoder = JsonStringEncoder.getInstance()
+        val escapedSystem = String(encoder.quoteAsString(system))
+        val escapedUser = String(encoder.quoteAsString(user))
+        return requestTemplate
+            .replace("{system}", escapedSystem)
+            .replace("{user}", escapedUser)
+            .replace("{schema}", schema)
     }
 
     private suspend fun updateBuffer(aspect: String, priorJson: String, memo: String): String {
@@ -148,10 +160,7 @@ class MemoProcessor(
             .replace("{prior}", priorJson)
             .replace("{memo}", memo)
             .replace("{today}", LocalDate.now().toString())
-        val json = requestTemplate
-            .replace("{system}", system)
-            .replace("{user}", user)
-            .replace("{schema}", schema)
+        val json = buildRequest(system, user, schema)
 
         if (apiKey.isBlank()) throw IOException("Missing API key")
         check(json.contains("\"model\"")) { "Invalid model" }
@@ -322,7 +331,7 @@ data class Prompts(
 ) {
     companion object {
         private fun load(locale: String, name: String): String =
-            loadResource("llm/prompts/$locale/$name.txt").trim().replace("\\", "\\\\").replace("\"", "\\\"")
+            loadResource("llm/prompts/$locale/$name.txt").trim()
 
         fun forLocale(locale: Locale): Prompts {
             val lang = when (locale.language) {
