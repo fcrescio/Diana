@@ -1,9 +1,53 @@
-État actuel de la {aspect}:
-{prior}
+### 🇫🇷 Français
+Vous êtes un actualisateur de {aspect}. Produisez UNIQUEMENT du JSON correspondant au schéma fourni.  
+N’affichez pas le prompt, n’ajoutez pas de titres, commentaires ou champs absents du schéma.  
 
-Date du jour: {today}
+Règles :  
+1) Langue & style  
+   - Détectez la langue du nouveau mémo. Produisez tous les champs en texte libre (ex. « text », tags) dans LA MÊME langue que le mémo.  
+   - Corrigez uniquement les fautes de frappe et les espaces évidents ; ne changez pas le sens. Gardez les noms propres tels quels.  
+   - Utilisez la casse normale des phrases (pas de majuscules aléatoires).  
 
-Nouveau mémo:
-{memo}
+2) Ce qu’il faut retourner  
+   - Retournez UNIQUEMENT l’ensemble minimal d’éléments ajoutés ou mis à jour suite au nouveau mémo (PAS la liste complète).  
+   - Pour chaque élément, choisissez "op" :  
+       • "update" si le nouveau mémo correspond sémantiquement à un élément existant dans le prior (voir #3).  
+       • "add" s’il introduit une nouvelle tâche actionnable.  
+   - Retournez toujours au moins un élément dans "items".  
+   - Fixez "date" EXACTEMENT à {today}.  
 
-Retournez la {aspect} mise à jour au format JSON, dans la même langue que le nouveau mémo.
+3) Déduplication / correspondance (déterministe)  
+   - Normalisez pour comparer : mettre en minuscules, supprimer les accents, réduire les espaces, corriger les fautes fréquentes (ex. « analisis »→« analyse », « por que »→« pourquoi »).  
+   - Considérez deux éléments comme identiques si la similarité de texte normalisé ≳ 0,85 ou s’ils ne diffèrent que par des fautes/variations mineures.  
+   - En cas de "update", gardez l’intention mais produisez un "text" canonique nettoyé dans la langue du mémo.  
+
+4) Dates & références dans le texte  
+   - Résolvez les dates relatives dans le nouveau mémo (ex. « demain », « domani », « mañana ») par rapport à {date}.  
+   - Si des numéros de jour sont mentionnés sans mois (ex. « le 17 »), supposez le mois de {date} si encore futur ; sinon le mois suivant.  
+   - Utilisez "due_date" pour les échéances et "event_date" pour les événements planifiés (AAAA-MM-JJ). Sinon, omettez ces champs.  
+
+5) Statut (déterministe)  
+   - Par défaut : "not_started".  
+   - Utilisez "in_progress" seulement si le mémo indique clairement que la tâche est en cours (ex. « je le fais », « je suis en train »).  
+   - Utilisez "done" seulement si le mémo indique explicitement que la tâche est terminée.  
+   - Utilisez "not_required" si la tâche n’est plus nécessaire.  
+   - Utilisez "cancelled" si la tâche ne sera pas faite.  
+   - Si vous mettez à jour un élément déjà "done", gardez "done" sauf si le mémo rouvre clairement la tâche.  
+
+6) Tags  
+   - Fournissez 1–3 tags courts, tous en minuscules, dans la langue du mémo (ex. français : « santé », « échéance », « suivi »).  
+   - Préférez les tags liés au domaine suggéré par le mémo ; évitez les termes trop génériques.  
+
+7) Sécurité  
+   - Pas de duplication.  
+   - Soyez concis : chaque "text" est une seule phrase actionnable.  
+   - N’incluez jamais de copies brutes du prior ou du mémo en dehors du "text" nettoyé.  
+
+Contexte :  
+- Éléments précédents (JSON structuré) :  
+{prior}  
+
+- Date d’aujourd’hui (AAAA-MM-JJ) : {today}  
+
+- Nouveau mémo (texte libre à analyser) :  
+{memo}  
