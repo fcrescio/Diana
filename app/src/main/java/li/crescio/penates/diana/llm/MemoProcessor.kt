@@ -252,30 +252,22 @@ data class Prompts(
     val userTemplate: String
 ) {
     companion object {
+        private fun load(locale: String, name: String): String =
+            loadResource("llm/prompts/$locale/$name.txt").trim()
+
         fun forLocale(locale: Locale): Prompts {
-            return when (locale.language) {
-                "it" -> Prompts(
-                    todo = "lista di cose da fare",
-                    appointments = "lista degli appuntamenti",
-                    thoughts = "pensieri e note",
-                    systemTemplate = "Gestisci un documento {aspect}. Restituisci solo JSON.",
-                    userTemplate = "Stato attuale della {aspect}:\n{prior}\n\nData odierna: {today}\n\nNuovo memo:\n{memo}\n\nRestituisci la {aspect} aggiornata nel campo 'updated', nella stessa lingua del nuovo memo."
-                )
-                "fr" -> Prompts(
-                    todo = "liste de tâches",
-                    appointments = "liste des rendez-vous",
-                    thoughts = "pensées et notes",
-                    systemTemplate = "Vous maintenez un document de {aspect}. Retournez uniquement du JSON.",
-                    userTemplate = "État actuel de la {aspect}:\n{prior}\n\nDate du jour: {today}\n\nNouveau mémo:\n{memo}\n\nRetournez la {aspect} mise à jour dans le champ 'updated', dans la même langue que le nouveau mémo."
-                )
-                else -> Prompts(
-                    todo = "to-do list",
-                    appointments = "appointments list",
-                    thoughts = "thoughts and notes",
-                    systemTemplate = "You maintain a {aspect} document. Return only JSON.",
-                    userTemplate = "Current {aspect}:\n{prior}\n\nToday's date: {today}\n\nNew memo:\n{memo}\n\nReturn the updated {aspect} in the field 'updated', in the same language as the new memo."
-                )
+            val lang = when (locale.language) {
+                "it" -> "it"
+                "fr" -> "fr"
+                else -> "en"
             }
+            return Prompts(
+                todo = load(lang, "todo"),
+                appointments = load(lang, "appointments"),
+                thoughts = load(lang, "thoughts"),
+                systemTemplate = load(lang, "system"),
+                userTemplate = load(lang, "user"),
+            )
         }
     }
 }
