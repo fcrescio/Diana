@@ -14,8 +14,17 @@ import li.crescio.penates.diana.R
 import li.crescio.penates.diana.llm.Appointment
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private fun parseDate(dateString: String): LocalDate? {
+    if (dateString.isBlank()) return null
+    return runCatching { OffsetDateTime.parse(dateString).toLocalDate() }
+        .recoverCatching { LocalDate.parse(dateString) }
+        .getOrNull()
+}
 
 @Composable
 fun NotesListScreen(
@@ -41,7 +50,13 @@ fun NotesListScreen(
                 item {
                     Text(stringResource(R.string.todo_list))
                     Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                        todoItems.forEach { item ->
+                        val dateFormatter = remember { DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM) }
+                        val sortedTodos = remember(todoItems) {
+                            todoItems.sortedBy {
+                                parseDate(it.dueDate.ifBlank { it.eventDate }) ?: LocalDate.MAX
+                            }
+                        }
+                        sortedTodos.forEach { item ->
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -67,6 +82,12 @@ fun NotesListScreen(
                                             .weight(1f)
                                     ) {
                                         Text(item.text)
+                                        parseDate(item.dueDate.ifBlank { item.eventDate })?.let { date ->
+                                            Text(
+                                                date.format(dateFormatter),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
                                         Row {
                                             item.tags.forEach { tag ->
                                                 AssistChip(
