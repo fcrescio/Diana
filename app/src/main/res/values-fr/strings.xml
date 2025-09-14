@@ -2,12 +2,13 @@
     <string name="app_name">Diana</string>
     <string name="record">Enregistrer</string>
     <string name="text_memo">Mémo texte</string>
-    <string name="view_recordings">Voir les enregistrements</string>
+    <string name="memo_archive">Archive des mémos</string>
     <string name="todo_list">Liste de tâches</string>
     <string name="appointments">Rendez-vous</string>
     <string name="thoughts_notes">Pensées et notes</string>
     <string name="back">Retour</string>
     <string name="play">Lire</string>
+    <string name="reprocess">Re-traiter</string>
     <string name="settings">Paramètres</string>
     <string name="finish_recording">Terminer l\'enregistrement</string>
     <string name="save">Sauvegarder</string>

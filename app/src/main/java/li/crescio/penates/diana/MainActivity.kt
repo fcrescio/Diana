@@ -44,19 +44,23 @@ import li.crescio.penates.diana.R
 import java.util.Locale
 import java.io.File
 import java.io.IOException
+import li.crescio.penates.diana.persistence.MemoRepository
 
 class MainActivity : ComponentActivity() {
     private lateinit var repository: NoteRepository
+    private lateinit var memoRepository: MemoRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val file = File(filesDir, "notes.txt")
+        val memoFile = File(filesDir, "memos.txt")
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener {
                 val firestore = FirebaseFirestore.getInstance()
                 repository = NoteRepository(firestore, file)
+                memoRepository = MemoRepository(memoFile)
                 val testDoc = firestore.collection("test").document("init")
                 testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
                     testDoc.get().addOnFailureListener { e ->
@@ -75,7 +79,7 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
                     }
                 }
-                setContent { DianaTheme { DianaApp(repository) } }
+                setContent { DianaTheme { DianaApp(repository, memoRepository) } }
             }
             .addOnFailureListener { e ->
                 Log.e("MainActivity", "Firebase authentication failed", e)
@@ -85,7 +89,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun DianaApp(repository: NoteRepository) {
+fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
@@ -119,6 +123,10 @@ fun DianaApp(repository: NoteRepository) {
 
     LaunchedEffect(logger) {
         logger.logFlow.collect { addLog(it) }
+    }
+
+    LaunchedEffect(memoRepository) {
+        recordedMemos.addAll(memoRepository.loadMemos())
     }
 
     LaunchedEffect(repository) {
@@ -205,14 +213,14 @@ fun DianaApp(repository: NoteRepository) {
                     )
                     NavigationBarItem(
                         selected = false,
-                        onClick = { screen = Screen.Recordings },
+                        onClick = { screen = Screen.Archive },
                         icon = {
                             Icon(
                                 imageVector = Icons.Filled.LibraryMusic,
-                                contentDescription = stringResource(R.string.view_recordings)
+                                contentDescription = stringResource(R.string.memo_archive)
                             )
                         },
-                        label = { Text(stringResource(R.string.view_recordings)) }
+                        label = { Text(stringResource(R.string.memo_archive)) }
                     )
                     NavigationBarItem(
                         selected = false,
@@ -270,19 +278,25 @@ fun DianaApp(repository: NoteRepository) {
                     }
                 }
             )
-            Screen.Recordings -> RecordedMemosScreen(recordedMemos, player) { screen = Screen.List }
+            Screen.Archive -> MemoArchiveScreen(recordedMemos, player, onBack = { screen = Screen.List }) { memo ->
+                screen = Screen.Processing
+                processMemo(memo)
+            }
             Screen.Recorder -> RecorderScreen(
                 logs,
                 addLog = { addLog(it) },
                 snackbarHostState = snackbarHostState
             ) { memo ->
                 recordedMemos.add(memo)
+                scope.launch { memoRepository.addMemo(memo) }
                 addLog(logRecorded)
                 screen = Screen.Processing
                 processMemo(memo)
             }
             Screen.TextMemo -> TextMemoScreen(onSave = { text ->
                 val memo = Memo(text)
+                recordedMemos.add(memo)
+                scope.launch { memoRepository.addMemo(memo) }
                 addLog(logAdded)
                 screen = Screen.Processing
                 processMemo(memo)
@@ -331,7 +345,7 @@ fun DianaApp(repository: NoteRepository) {
 
 sealed class Screen {
     data object List : Screen()
-    data object Recordings : Screen()
+    data object Archive : Screen()
     data object Recorder : Screen()
     data object TextMemo : Screen()
     data object Processing : Screen()

@@ -2,13 +2,14 @@
     <string name="app_name">Diana</string>
     <string name="record">Record</string>
     <string name="text_memo">Text Memo</string>
-    <string name="view_recordings">View Recordings</string>
+    <string name="memo_archive">Memo Archive</string>
     <string name="todo_list">To-Do List</string>
     <string name="appointments">Appointments</string>
     <string name="thoughts_notes">Thoughts &amp; Notes</string>
     <string name="filter_tag">Filter by tag</string>
     <string name="back">Back</string>
     <string name="play">Play</string>
+    <string name="reprocess">Reprocess</string>
     <string name="settings">Settings</string>
     <string name="finish_recording">Finish Recording</string>
     <string name="save">Save</string>
