@@ -1,7 +1,11 @@
 {
-  "type": "object",
-  "properties": {
-    "updated": { "type": "string" }
+  "name": "update",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "updated": { "type": "string" }
+    },
+    "required": ["updated"]
   },
-  "required": ["updated"]
+  "strict": true
 }

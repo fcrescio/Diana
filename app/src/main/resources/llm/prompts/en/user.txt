@@ -6,4 +6,4 @@ Today's date: {today}
 New memo:
 {memo}
 
-Return the updated {aspect} in the field 'updated', in the same language as the new memo.
+Return the updated {aspect} in JSON, in the same language as the new memo.

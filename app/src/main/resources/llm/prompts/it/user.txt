@@ -6,4 +6,4 @@ Data odierna: {today}
 Nuovo memo:
 {memo}
 
-Restituisci la {aspect} aggiornata nel campo 'updated', nella stessa lingua del nuovo memo.
+Restituisci la {aspect} aggiornata in formato JSON, nella stessa lingua del nuovo memo.

@@ -6,9 +6,6 @@
   ],
   "response_format": {
     "type":"json_schema",
-    "json_schema": {
-      "name":"update",
-      "schema": {schema}
-    }
+    "json_schema": {schema}
   }
 }
