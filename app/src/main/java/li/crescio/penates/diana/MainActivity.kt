@@ -33,6 +33,8 @@ import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.llm.Appointment
+import li.crescio.penates.diana.llm.MemoSummary
+import li.crescio.penates.diana.llm.Thought
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.persistence.NoteRepository
@@ -131,12 +133,32 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
 
     LaunchedEffect(repository) {
         val notes = repository.loadNotes()
-        todo = notes.filterIsInstance<StructuredNote.ToDo>().joinToString("\n") { it.text }
-        todoItems = notes.filterIsInstance<StructuredNote.ToDo>().map { TodoItem(it.text, it.status, it.tags) }
-        appointments = notes.filterIsInstance<StructuredNote.Event>().map {
-            Appointment(it.text, it.datetime, it.location)
+        val todoNotes = notes.filterIsInstance<StructuredNote.ToDo>()
+        val eventNotes = notes.filterIsInstance<StructuredNote.Event>()
+        val memoNotes = notes.filterIsInstance<StructuredNote.Memo>()
+        val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
+
+        todo = todoNotes.joinToString("\n") { it.text }
+        todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags) }
+        appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
+        thoughtNotes = memoNotes + freeNotes
+        val thoughtItems = (memoNotes + freeNotes).map { note ->
+            when (note) {
+                is StructuredNote.Memo -> Thought(note.text, note.tags)
+                is StructuredNote.Free -> Thought(note.text, note.tags)
+                else -> throw IllegalStateException("Unexpected note type")
+            }
         }
-        thoughtNotes = notes.filter { it is StructuredNote.Memo || it is StructuredNote.Free }
+
+        val summary = MemoSummary(
+            todo = todo,
+            appointments = appointments.joinToString("\n") { it.text },
+            thoughts = thoughtItems.joinToString("\n") { it.text },
+            todoItems = todoItems,
+            appointmentItems = appointments,
+            thoughtItems = thoughtItems
+        )
+        processor.initialize(summary)
     }
 
     fun processMemo(memo: Memo) {
