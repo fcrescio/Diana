@@ -57,6 +57,16 @@ class MemoProcessor(
     private val appointmentSchema = loadResource("llm/schema/appointment.json")
     private val thoughtSchema = loadResource("llm/schema/thought.json")
 
+    /** Seed the processor with an existing summary. */
+    fun initialize(summary: MemoSummary) {
+        todo = summary.todo
+        todoItems = summary.todoItems
+        appointments = summary.appointments
+        appointmentItems = summary.appointmentItems
+        thoughts = summary.thoughts
+        thoughtItems = summary.thoughtItems
+    }
+
     /**
      * Update the running summaries based on [memo] and return the latest values.
      */

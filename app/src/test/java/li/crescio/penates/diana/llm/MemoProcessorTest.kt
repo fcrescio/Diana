@@ -55,6 +55,59 @@ class MemoProcessorTest {
     }
 
     @Test
+    fun process_appendsTodoItems_afterInitialization() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+
+        val server = MockWebServer()
+        fun completion(vararg items: JSONObject): String {
+            val itemsArr = JSONArray()
+            items.forEach { itemsArr.put(it) }
+            val content = JSONObject().put("updated", "u").put("items", itemsArr)
+            val message = JSONObject().put("content", content.toString())
+            val choice = JSONObject().put("message", message)
+            val choices = JSONArray().put(choice)
+            return JSONObject().put("choices", choices).toString()
+        }
+        val item2 = JSONObject().put("text", "second").put("status", "").put("tags", JSONArray())
+        server.enqueue(MockResponse().setBody(completion(item2)).setResponseCode(200))
+        server.start()
+
+        val processor = MemoProcessor(
+            apiKey = "key",
+            logger = mockk(relaxed = true),
+            locale = Locale.ENGLISH,
+            baseUrl = server.url("/").toString(),
+            client = OkHttpClient(),
+        )
+
+        val initial = MemoSummary(
+            todo = "first",
+            appointments = "",
+            thoughts = "",
+            todoItems = listOf(TodoItem("first", "", emptyList())),
+            appointmentItems = emptyList(),
+            thoughtItems = emptyList()
+        )
+        processor.initialize(initial)
+
+        val summary = processor.process(
+            Memo("second"),
+            processAppointments = false,
+            processThoughts = false
+        )
+
+        assertEquals(
+            listOf(
+                TodoItem("first", "", emptyList()),
+                TodoItem("second", "", emptyList())
+            ),
+            summary.todoItems
+        )
+
+        server.shutdown()
+    }
+
+    @Test
     fun process_appendsTodoItems() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
 
