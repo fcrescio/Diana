@@ -8,17 +8,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import li.crescio.penates.diana.R
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.player.Player
-import androidx.compose.ui.res.stringResource
-import li.crescio.penates.diana.R
 
 @Composable
-fun RecordedMemosScreen(
+fun MemoArchiveScreen(
     memos: List<Memo>,
     player: Player,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onReprocess: (Memo) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -34,15 +35,27 @@ fun RecordedMemosScreen(
             items(memos) { memo ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
                 ) {
-                    Button(onClick = { memo.audioPath?.let { player.play(it) } }) { Text(stringResource(R.string.play)) }
+                    if (memo.audioPath != null) {
+                        Button(onClick = { player.play(memo.audioPath) }) {
+                            Text(stringResource(R.string.play))
+                        }
+                    }
                     Text(
                         memo.text,
-                        modifier = Modifier.padding(start = 16.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 16.dp)
                     )
+                    Button(onClick = { onReprocess(memo) }) {
+                        Text(stringResource(R.string.reprocess))
+                    }
                 }
             }
         }
     }
 }
+

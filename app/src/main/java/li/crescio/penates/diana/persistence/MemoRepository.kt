@@ -1,0 +1,39 @@
+package li.crescio.penates.diana.persistence
+
+import li.crescio.penates.diana.notes.Memo
+import org.json.JSONObject
+import java.io.File
+
+class MemoRepository(private val file: File) {
+    suspend fun addMemo(memo: Memo) {
+        if (!file.exists()) {
+            file.createNewFile()
+        }
+        file.appendText(toJson(memo) + "\n")
+    }
+
+    suspend fun loadMemos(): List<Memo> {
+        if (!file.exists()) return emptyList()
+        return file.readLines().mapNotNull { parse(it) }
+    }
+
+    private fun toJson(memo: Memo): String {
+        val obj = JSONObject()
+        obj.put("text", memo.text)
+        memo.audioPath?.let { obj.put("audioPath", it) }
+        return obj.toString()
+    }
+
+    private fun parse(line: String): Memo? {
+        return try {
+            val obj = JSONObject(line)
+            val text = obj.getString("text")
+            val audioPath = obj.optString("audioPath", null)
+            val path = if (audioPath.isNullOrEmpty()) null else audioPath
+            Memo(text, path)
+        } catch (_: Exception) {
+            null
+        }
+    }
+}
+
