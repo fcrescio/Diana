@@ -101,7 +101,7 @@ class MemoProcessor(
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
-        return obj.toString()
+        return obj.toString().replace("\\", "\\\\").replace("\"", "\\\"")
     }
 
     private fun appointmentPriorJson(): String {
@@ -116,7 +116,7 @@ class MemoProcessor(
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
-        return obj.toString()
+        return obj.toString().replace("\\", "\\\\").replace("\"", "\\\"")
     }
 
     private fun thoughtPriorJson(): String {
@@ -132,7 +132,7 @@ class MemoProcessor(
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
-        return obj.toString()
+        return obj.toString().replace("\\", "\\\\").replace("\"", "\\\"")
     }
 
     private suspend fun updateBuffer(aspect: String, priorJson: String, memo: String): String {
@@ -322,7 +322,7 @@ data class Prompts(
 ) {
     companion object {
         private fun load(locale: String, name: String): String =
-            loadResource("llm/prompts/$locale/$name.txt").trim()
+            loadResource("llm/prompts/$locale/$name.txt").trim().replace("\\", "\\\\").replace("\"", "\\\"")
 
         fun forLocale(locale: Locale): Prompts {
             val lang = when (locale.language) {
