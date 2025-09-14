@@ -169,6 +169,69 @@ class MemoProcessorTest {
     }
 
     @Test
+    fun process_handlesSpecialCharacters() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+
+        val server = MockWebServer()
+        fun completion(vararg items: JSONObject): String {
+            val itemsArr = JSONArray()
+            items.forEach { itemsArr.put(it) }
+            val content = JSONObject()
+                .put("date", "2024-01-01")
+                .put("action", "add")
+                .put("items", itemsArr)
+            val message = JSONObject().put("content", content.toString())
+            val choice = JSONObject().put("message", message)
+            val choices = JSONArray().put(choice)
+            return JSONObject().put("choices", choices).toString()
+        }
+        val dummy = JSONObject().put("text", "x").put("status", "not_started").put("tags", JSONArray())
+        server.enqueue(MockResponse().setBody(completion(dummy)).setResponseCode(200))
+        server.start()
+
+        val processor = MemoProcessor(
+            apiKey = "key",
+            logger = mockk(relaxed = true),
+            locale = Locale.ENGLISH,
+            baseUrl = server.url("/").toString(),
+            client = OkHttpClient(),
+        )
+
+        val tricky = "first \"quoted\" \\slash"
+        val summary = MemoSummary(
+            todo = tricky,
+            appointments = "",
+            thoughts = "",
+            todoItems = listOf(TodoItem(tricky, "not_started", emptyList())),
+            appointmentItems = emptyList(),
+            thoughtItems = emptyList(),
+        )
+        processor.initialize(summary)
+
+        val memoText = "memo \"quote\" \\backslash"
+        processor.process(Memo(memoText), processAppointments = false, processThoughts = false)
+
+        val recorded = server.takeRequest()
+        val body = recorded.body.readUtf8()
+        val obj = JSONObject(body)
+        val content = obj.getJSONArray("messages").getJSONObject(1).getString("content")
+
+        assertTrue(content.contains(memoText))
+        val expectedPrior = JSONObject().apply {
+            val itemsArr = JSONArray()
+            val itemObj = JSONObject()
+                .put("text", tricky)
+                .put("status", "not_started")
+                .put("tags", JSONArray())
+            itemsArr.put(itemObj)
+            put("items", itemsArr)
+        }.toString()
+        assertTrue(content.contains(expectedPrior))
+
+        server.shutdown()
+    }
+
+    @Test
     fun process_non2xxStatus_throwsIOException() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
 
