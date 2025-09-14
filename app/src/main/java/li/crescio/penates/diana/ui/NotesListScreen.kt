@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import li.crescio.penates.diana.R
 import li.crescio.penates.diana.llm.Appointment
@@ -81,18 +82,40 @@ fun NotesListScreen(
                                             .padding(start = 8.dp)
                                             .weight(1f)
                                     ) {
-                                        Text(item.text)
+                                        val textColor = if (item.status == "done") {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                        val decoration = if (item.status == "done") {
+                                            TextDecoration.LineThrough
+                                        } else {
+                                            TextDecoration.None
+                                        }
+                                        Text(
+                                            item.text,
+                                            color = textColor,
+                                            textDecoration = decoration
+                                        )
                                         parseDate(item.dueDate.ifBlank { item.eventDate })?.let { date ->
                                             Text(
                                                 date.format(dateFormatter),
-                                                style = MaterialTheme.typography.bodySmall
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = textColor,
+                                                textDecoration = decoration
                                             )
                                         }
                                         Row {
                                             item.tags.forEach { tag ->
                                                 AssistChip(
                                                     onClick = {},
-                                                    label = { Text(tag) },
+                                                    label = {
+                                                        Text(
+                                                            tag,
+                                                            color = textColor,
+                                                            textDecoration = decoration
+                                                        )
+                                                    },
                                                     modifier = Modifier.padding(end = 4.dp)
                                                 )
                                             }
