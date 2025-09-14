@@ -100,6 +100,8 @@ class MemoProcessor(
             val tagsArr = JSONArray()
             item.tags.forEach { tagsArr.put(it) }
             itemObj.put("tags", tagsArr)
+            if (item.dueDate.isNotBlank()) itemObj.put("due_date", item.dueDate)
+            if (item.eventDate.isNotBlank()) itemObj.put("event_date", item.eventDate)
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
@@ -239,17 +241,22 @@ class MemoProcessor(
         val itemsArr = obj.optJSONArray("items")
         when (aspect) {
             prompts.todo -> {
-                val newItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                val updates = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
                     val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                    val op = itemObj.optString("op")
                     val text = itemObj.optString("text")
                     val status = itemObj.optString("status")
                     val tagsArr = itemObj.optJSONArray("tags")
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                    if (text.isBlank()) null else TodoItem(text, status, tags)
+                    val dueDate = itemObj.optString("due_date", "")
+                    val eventDate = itemObj.optString("event_date", "")
+                    if (text.isBlank()) null else op to TodoItem(text, status, tags, dueDate, eventDate)
                 }
                 val merged = todoItems.associateBy { it.text }.toMutableMap()
-                for (item in newItems) {
-                    merged[item.text] = item
+                for ((op, item) in updates) {
+                    when (op) {
+                        "add", "update" -> merged[item.text] = item
+                    }
                 }
                 todoItems = merged.values.toList()
                 todoItems.joinToString("\n") { it.text }
@@ -282,7 +289,13 @@ class MemoProcessor(
 }
 }
 
-data class TodoItem(val text: String, val status: String, val tags: List<String>)
+data class TodoItem(
+    val text: String,
+    val status: String,
+    val tags: List<String>,
+    val dueDate: String = "",
+    val eventDate: String = "",
+)
 
 data class Appointment(val text: String, val datetime: String, val location: String)
 

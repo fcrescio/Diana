@@ -43,7 +43,9 @@ class NoteRepository(
                     "todo" -> text?.let {
                         val status = doc.getString("status") ?: ""
                         val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                        StructuredNote.ToDo(it, status, tags, createdAt)
+                        val dueDate = doc.getString("dueDate") ?: ""
+                        val eventDate = doc.getString("eventDate") ?: ""
+                        StructuredNote.ToDo(it, status, tags, dueDate, eventDate, createdAt)
                     }
                     "memo" -> text?.let {
                         val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -165,6 +167,8 @@ class NoteRepository(
             "text" to note.text,
             "status" to note.status,
             "tags" to note.tags,
+            "dueDate" to note.dueDate,
+            "eventDate" to note.eventDate,
             "datetime" to "",
             "location" to "",
             "createdAt" to note.createdAt
@@ -207,7 +211,9 @@ class NoteRepository(
                     val status = obj.optString("status", "")
                     val tagsArr = obj.optJSONArray("tags")
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                    StructuredNote.ToDo(text, status, tags, createdAt)
+                    val dueDate = obj.optString("dueDate", "")
+                    val eventDate = obj.optString("eventDate", "")
+                    StructuredNote.ToDo(text, status, tags, dueDate, eventDate, createdAt)
                 }
                 "memo" -> {
                     val tagsArr = obj.optJSONArray("tags")
@@ -235,7 +241,9 @@ class NoteRepository(
     ): List<StructuredNote> {
         val notes = mutableListOf<StructuredNote>()
         if (saveTodos) {
-            notes += summary.todoItems.map { StructuredNote.ToDo(it.text, it.status, it.tags) }
+            notes += summary.todoItems.map {
+                StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate)
+            }
         }
         if (saveAppointments) {
             notes += summary.appointmentItems.map { StructuredNote.Event(it.text, it.datetime, it.location) }

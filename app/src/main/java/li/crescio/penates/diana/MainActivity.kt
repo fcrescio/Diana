@@ -139,7 +139,7 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
         val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
 
         todo = todoNotes.joinToString("\n") { it.text }
-        todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags) }
+        todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate) }
         appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
         thoughtNotes = memoNotes + freeNotes
         val thoughtItems = (memoNotes + freeNotes).map { note ->
@@ -270,14 +270,14 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                 processThoughts,
                 modifier = Modifier.padding(innerPadding),
                 onTodoCheckedChange = { item, checked ->
-                    val newStatus = if (checked) "done" else "open"
+                      val newStatus = if (checked) "done" else "not_started"
                     todoItems = todoItems.map {
                         if (it.text == item.text) it.copy(status = newStatus) else it
                     }
                     scope.launch {
-                        val todoNotes = todoItems.map {
-                            StructuredNote.ToDo(it.text, it.status, it.tags)
-                        }
+                          val todoNotes = todoItems.map {
+                              StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate)
+                          }
                         val apptNotes = if (processAppointments) {
                             appointments.map {
                                 StructuredNote.Event(it.text, it.datetime, it.location)
