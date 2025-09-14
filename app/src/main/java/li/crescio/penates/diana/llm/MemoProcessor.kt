@@ -77,18 +77,65 @@ class MemoProcessor(
         processThoughts: Boolean = true,
     ): MemoSummary {
         if (processTodos) {
-            todo = updateBuffer(prompts.todo, todo, memo.text)
+            todo = updateBuffer(prompts.todo, todoPriorJson(), memo.text)
         }
         if (processAppointments) {
-            appointments = updateBuffer(prompts.appointments, appointments, memo.text)
+            appointments = updateBuffer(prompts.appointments, appointmentPriorJson(), memo.text)
         }
         if (processThoughts) {
-            thoughts = updateBuffer(prompts.thoughts, thoughts, memo.text)
+            thoughts = updateBuffer(prompts.thoughts, thoughtPriorJson(), memo.text)
         }
         return MemoSummary(todo, appointments, thoughts, todoItems, appointmentItems, thoughtItems)
     }
 
-    private suspend fun updateBuffer(aspect: String, prior: String, memo: String): String {
+    private fun todoPriorJson(): String {
+        val obj = JSONObject()
+        val itemsArr = JSONArray()
+        for (item in todoItems) {
+            val itemObj = JSONObject()
+            itemObj.put("text", item.text)
+            itemObj.put("status", item.status)
+            val tagsArr = JSONArray()
+            item.tags.forEach { tagsArr.put(it) }
+            itemObj.put("tags", tagsArr)
+            itemsArr.put(itemObj)
+        }
+        obj.put("items", itemsArr)
+        return obj.toString()
+    }
+
+    private fun appointmentPriorJson(): String {
+        val obj = JSONObject()
+        obj.put("updated", appointments)
+        val itemsArr = JSONArray()
+        for (item in appointmentItems) {
+            val itemObj = JSONObject()
+            itemObj.put("text", item.text)
+            itemObj.put("datetime", item.datetime)
+            itemObj.put("location", item.location)
+            itemsArr.put(itemObj)
+        }
+        obj.put("items", itemsArr)
+        return obj.toString()
+    }
+
+    private fun thoughtPriorJson(): String {
+        val obj = JSONObject()
+        obj.put("updated", thoughts)
+        val itemsArr = JSONArray()
+        for (item in thoughtItems) {
+            val itemObj = JSONObject()
+            itemObj.put("text", item.text)
+            val tagsArr = JSONArray()
+            item.tags.forEach { tagsArr.put(it) }
+            itemObj.put("tags", tagsArr)
+            itemsArr.put(itemObj)
+        }
+        obj.put("items", itemsArr)
+        return obj.toString()
+    }
+
+    private suspend fun updateBuffer(aspect: String, priorJson: String, memo: String): String {
         val schema = when (aspect) {
             prompts.todo -> todoSchema
             prompts.appointments -> appointmentSchema
@@ -98,7 +145,7 @@ class MemoProcessor(
         val system = prompts.systemTemplate.replace("{aspect}", aspect)
         val user = prompts.userTemplate
             .replace("{aspect}", aspect)
-            .replace("{prior}", prior)
+            .replace("{prior}", priorJson)
             .replace("{memo}", memo)
             .replace("{today}", LocalDate.now().toString())
         val json = requestTemplate
@@ -206,7 +253,7 @@ class MemoProcessor(
                     val location = itemObj.optString("location")
                     if (text.isBlank()) null else Appointment(text, datetime, location)
                 }
-                obj.optString("updated", prior)
+                obj.optString("updated", appointments)
             }
             prompts.thoughts -> {
                 thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
@@ -216,9 +263,9 @@ class MemoProcessor(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     if (text.isBlank()) null else Thought(text, tags)
                 }
-                obj.optString("updated", prior)
+                obj.optString("updated", thoughts)
             }
-            else -> obj.optString("updated", prior)
+            else -> obj.optString("updated", "")
         }
     } catch (e: Exception) {
         throw IOException("Invalid JSON", e)
