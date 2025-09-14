@@ -82,11 +82,15 @@ fun NotesListScreen(
                                             .padding(start = 8.dp)
                                             .weight(1f)
                                     ) {
-                                        val textColor = if (item.status == "done") {
+                                        val baseColor = if (item.status == "done") {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         } else {
                                             MaterialTheme.colorScheme.onSurface
                                         }
+                                        val textColor = calculateUrgencyColor(
+                                            item.dueDate.ifBlank { item.eventDate },
+                                            baseColor
+                                        )
                                         val decoration = if (item.status == "done") {
                                             TextDecoration.LineThrough
                                         } else {
