@@ -9,10 +9,9 @@ Rules:
 
 2) What to return
    - Return ONLY the minimal set of items that are added or updated as a result of new memo (NOT the full list).
-   - Choose "action":
+   - For each item choose "op":
        • "update" if new memo semantically matches an existing item in prior (see #3).
        • "add" if it introduces a new actionable task.
-       • Do NOT use "noop" with this schema.
    - Always return at least one item in "items".
 
 3) Dedup / matching (deterministic)
@@ -23,12 +22,14 @@ Rules:
 4) Dates & references inside text
    - Resolve relative dates in new memo (e.g., “tomorrow”, “domani”, “mañana”) relative to {date}.
    - If day numbers are mentioned without a month (e.g., “the 17th”), assume the month of {date} if still in the future; otherwise the next month.
-   - Since the schema has no date fields, include any resolved dates inline in the item "text" (concise, in the memo’s language).
+   - Use "due_date" for deadlines and "event_date" for scheduled events (YYYY-MM-DD). If not applicable, omit these fields.
 
 5) Status (deterministic)
    - Default: "not_started".
    - Use "in_progress" only if new memo clearly states the task is already underway (e.g., “I’m doing it”, “sto facendo”, “ya empecé”).
    - Use "done" only if new memo explicitly says it is completed.
+   - Use "not_required" if the task is no longer necessary.
+   - Use "cancelled" if the task will not be done.
    - If updating an existing item that was "done", keep "done" unless new memo clearly reopens the task.
 
 6) Tags

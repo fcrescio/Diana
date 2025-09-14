@@ -16,6 +16,8 @@ sealed class StructuredNote(open val createdAt: Long) {
         val text: String,
         val status: String = "",
         val tags: List<String> = emptyList(),
+        val dueDate: String = "",
+        val eventDate: String = "",
         override val createdAt: Long = System.currentTimeMillis()
     ) : StructuredNote(createdAt)
 

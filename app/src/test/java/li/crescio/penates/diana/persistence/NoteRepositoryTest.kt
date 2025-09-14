@@ -39,7 +39,7 @@ class NoteRepositoryTest {
 
         val repo = NoteRepository(firestore, file)
         val notes = listOf(
-            StructuredNote.ToDo("task", status = "open", tags = listOf("home"), createdAt = 1L),
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf("home"), createdAt = 1L),
             StructuredNote.Memo("memo", tags = listOf("x"), createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", "office", createdAt = 3L),
             StructuredNote.Free("free", tags = listOf("y"), createdAt = 4L)
@@ -63,7 +63,7 @@ class NoteRepositoryTest {
         val file = createTempFile().toFile()
 
         val localNotes = listOf(
-            StructuredNote.ToDo("task", status = "open", tags = listOf(), createdAt = 100L),
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf(), createdAt = 100L),
             StructuredNote.Memo("memo", tags = emptyList(), createdAt = 200L)
         )
         file.writeText(localNotes.joinToString("\n") { JSONObject(expectedMap(it)).toString() })
@@ -71,9 +71,9 @@ class NoteRepositoryTest {
         val firestore = mockk<FirebaseFirestore>()
         val collection = mockk<CollectionReference>()
         val querySnapshot = mockk<QuerySnapshot>()
-        val doc1 = mockk<DocumentSnapshot>()
-        val doc2 = mockk<DocumentSnapshot>()
-        val doc3 = mockk<DocumentSnapshot>()
+        val doc1 = mockk<DocumentSnapshot>(relaxed = true)
+        val doc2 = mockk<DocumentSnapshot>(relaxed = true)
+        val doc3 = mockk<DocumentSnapshot>(relaxed = true)
 
         every { firestore.collection("notes") } returns collection
         every { collection.get() } returns Tasks.forResult(querySnapshot)
@@ -107,7 +107,7 @@ class NoteRepositoryTest {
         val expected = listOf(
             StructuredNote.Event("meet", "2024-05-01", "office", createdAt = 300L),
             StructuredNote.Memo("memo", tags = emptyList(), createdAt = 200L),
-            StructuredNote.ToDo("task", status = "open", tags = listOf(), createdAt = 100L)
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf(), createdAt = 100L)
         )
 
         assertEquals(expected, result)
@@ -123,7 +123,7 @@ class NoteRepositoryTest {
             appointments = "",
             thoughts = "",
             todoItems = listOf(
-                TodoItem("task one", "open", emptyList()),
+                TodoItem("task one", "not_started", emptyList()),
                 TodoItem("task two", "done", listOf("tag"))
             ),
             appointmentItems = listOf(
@@ -137,13 +137,19 @@ class NoteRepositoryTest {
         )
 
         val method = NoteRepository::class.java
-            .getDeclaredMethod("summaryToNotes", MemoSummary::class.java)
+            .getDeclaredMethod(
+                "summaryToNotes",
+                MemoSummary::class.java,
+                Boolean::class.javaPrimitiveType,
+                Boolean::class.javaPrimitiveType,
+                Boolean::class.javaPrimitiveType,
+            )
             .apply { isAccessible = true }
 
-        val result = method.invoke(repo, summary) as List<StructuredNote>
+        val result = method.invoke(repo, summary, true, true, true) as List<StructuredNote>
 
         val expected = listOf(
-            StructuredNote.ToDo("task one", status = "open", tags = emptyList(), createdAt = (result[0] as StructuredNote.ToDo).createdAt),
+            StructuredNote.ToDo("task one", status = "not_started", tags = emptyList(), createdAt = (result[0] as StructuredNote.ToDo).createdAt),
             StructuredNote.ToDo("task two", status = "done", tags = listOf("tag"), createdAt = (result[1] as StructuredNote.ToDo).createdAt),
             StructuredNote.Event("meet Alice", "", "", createdAt = (result[2] as StructuredNote.Event).createdAt),
             StructuredNote.Event("meet Bob", "", "", createdAt = (result[3] as StructuredNote.Event).createdAt),
@@ -165,7 +171,7 @@ class NoteRepositoryTest {
             .apply { isAccessible = true }
 
         val notes = listOf(
-            StructuredNote.ToDo("task", status = "open", tags = listOf("x"), createdAt = 1L),
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf("x"), createdAt = 1L),
             StructuredNote.Memo("memo", tags = listOf("t"), createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", "home", createdAt = 3L),
             StructuredNote.Free("free", tags = listOf("z"), createdAt = 4L)
@@ -182,8 +188,8 @@ class NoteRepositoryTest {
     fun deleteTodoItem_removesFromFileAndFirestore() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
         val file = createTempFile().toFile()
-        val todo1 = StructuredNote.ToDo("task1", status = "open", tags = emptyList(), createdAt = 1L)
-        val todo2 = StructuredNote.ToDo("task2", status = "open", tags = emptyList(), createdAt = 2L)
+        val todo1 = StructuredNote.ToDo("task1", status = "not_started", tags = emptyList(), createdAt = 1L)
+        val todo2 = StructuredNote.ToDo("task2", status = "not_started", tags = emptyList(), createdAt = 2L)
         val memo = StructuredNote.Memo("memo", tags = emptyList(), createdAt = 3L)
         file.writeText(listOf(todo1, todo2, memo).joinToString("\n") { JSONObject(expectedMap(it)).toString() })
 
@@ -252,6 +258,8 @@ class NoteRepositoryTest {
             "text" to note.text,
             "status" to note.status,
             "tags" to note.tags,
+            "dueDate" to note.dueDate,
+            "eventDate" to note.eventDate,
             "datetime" to "",
             "location" to "",
             "createdAt" to note.createdAt
@@ -294,6 +302,8 @@ class NoteRepositoryTest {
         obj.optJSONArray("tags")?.let { arr ->
             map["tags"] = (0 until arr.length()).map { arr.getString(it) }
         }
+        obj.optString("dueDate", null)?.let { map["dueDate"] = it }
+        obj.optString("eventDate", null)?.let { map["eventDate"] = it }
         return map
     }
 }
