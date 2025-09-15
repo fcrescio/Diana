@@ -186,7 +186,11 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                 if (processThoughts) {
                     thoughtNotes = summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
                 }
-                repository.saveSummary(summary, processTodos, processAppointments, processThoughts)
+                val saved = repository.saveSummary(summary, processTodos, processAppointments, processThoughts)
+                if (processTodos) {
+                    todoItems = saved.todoItems
+                }
+                processor.initialize(saved)
                 screen = Screen.List
             } catch (e: IOException) {
                 Log.e("DianaApp", "Error processing memo: ${e.message}", e)

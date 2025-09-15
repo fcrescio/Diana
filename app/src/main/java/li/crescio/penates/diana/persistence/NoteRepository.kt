@@ -3,6 +3,7 @@ package li.crescio.penates.diana.persistence
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.MemoSummary
+import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
 import org.json.JSONObject
 import java.io.File
@@ -11,11 +12,17 @@ class NoteRepository(
     private val firestore: FirebaseFirestore,
     private val file: File
 ) {
-    suspend fun saveNotes(notes: List<StructuredNote>) {
-        file.writeText(notes.joinToString("\n") { toJson(it) })
+    suspend fun saveNotes(notes: List<StructuredNote>): List<StructuredNote> {
+        val saved = mutableListOf<StructuredNote>()
         for (note in notes) {
-            firestore.collection("notes").add(noteToMap(note)).await()
+            val doc = firestore.collection("notes").add(noteToMap(note)).await()
+            val updated = if (note is StructuredNote.ToDo && note.id.isBlank()) {
+                note.copy(id = doc.id)
+            } else note
+            saved += updated
         }
+        file.writeText(saved.joinToString("\n") { toJson(it) })
+        return saved
     }
 
     suspend fun saveSummary(
@@ -23,8 +30,14 @@ class NoteRepository(
         saveTodos: Boolean = true,
         saveAppointments: Boolean = true,
         saveThoughts: Boolean = true,
-    ) {
-        saveNotes(summaryToNotes(summary, saveTodos, saveAppointments, saveThoughts))
+    ): MemoSummary {
+        val savedNotes = saveNotes(summaryToNotes(summary, saveTodos, saveAppointments, saveThoughts))
+        val updatedTodos = if (saveTodos) {
+            savedNotes.filterIsInstance<StructuredNote.ToDo>().map {
+                TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate, it.id)
+            }
+        } else summary.todoItems
+        return summary.copy(todoItems = updatedTodos)
     }
 
     suspend fun loadNotes(): List<StructuredNote> {
