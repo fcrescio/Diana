@@ -44,7 +44,7 @@ class MemoProcessorTest {
             .put("op", "add")
             .put("text", "todo updated")
             .put("status", "not_started")
-            .put("tags", JSONArray())
+            .put("tags", JSONArray().put("tag"))
         server.enqueue(MockResponse().setBody(completionTodo(todoItem)).setResponseCode(200))
         server.enqueue(MockResponse().setBody(completion("appointments updated")).setResponseCode(200))
         server.enqueue(MockResponse().setBody(completion("thoughts updated")).setResponseCode(200))
@@ -90,7 +90,7 @@ class MemoProcessorTest {
             .put("op", "add")
             .put("text", "second")
             .put("status", "not_started")
-            .put("tags", JSONArray())
+            .put("tags", JSONArray().put("tag"))
         server.enqueue(MockResponse().setBody(completion(item2)).setResponseCode(200))
         server.start()
 
@@ -106,7 +106,7 @@ class MemoProcessorTest {
             todo = "first",
             appointments = "",
             thoughts = "",
-            todoItems = listOf(TodoItem("first", "not_started", emptyList())),
+            todoItems = listOf(TodoItem("first", "not_started", listOf("tag"))),
             appointmentItems = emptyList(),
             thoughtItems = emptyList()
         )
@@ -120,8 +120,8 @@ class MemoProcessorTest {
 
         assertEquals(
             listOf(
-                TodoItem("first", "not_started", emptyList()),
-                TodoItem("second", "not_started", emptyList())
+                TodoItem("first", "not_started", listOf("tag")),
+                TodoItem("second", "not_started", listOf("tag"))
             ),
             summary.todoItems
         )
@@ -149,12 +149,12 @@ class MemoProcessorTest {
             .put("op", "add")
             .put("text", "first")
             .put("status", "not_started")
-            .put("tags", JSONArray())
+            .put("tags", JSONArray().put("tag"))
         val item2 = JSONObject()
             .put("op", "add")
             .put("text", "second")
             .put("status", "not_started")
-            .put("tags", JSONArray())
+            .put("tags", JSONArray().put("tag"))
         server.enqueue(MockResponse().setBody(completion(item1)).setResponseCode(200))
         server.enqueue(MockResponse().setBody(completion(item2)).setResponseCode(200))
         server.start()
@@ -172,8 +172,8 @@ class MemoProcessorTest {
 
         assertEquals(
             listOf(
-                TodoItem("first", "not_started", emptyList()),
-                TodoItem("second", "not_started", emptyList())
+                TodoItem("first", "not_started", listOf("tag")),
+                TodoItem("second", "not_started", listOf("tag"))
             ),
             summary.todoItems
         )
@@ -201,7 +201,7 @@ class MemoProcessorTest {
             .put("op", "add")
             .put("text", "x")
             .put("status", "not_started")
-            .put("tags", JSONArray())
+            .put("tags", JSONArray().put("tag"))
         server.enqueue(MockResponse().setBody(completion(dummy)).setResponseCode(200))
         server.start()
 
@@ -218,7 +218,7 @@ class MemoProcessorTest {
             todo = tricky,
             appointments = "",
             thoughts = "",
-            todoItems = listOf(TodoItem(tricky, "not_started", emptyList())),
+            todoItems = listOf(TodoItem(tricky, "not_started", listOf("tag"))),
             appointmentItems = emptyList(),
             thoughtItems = emptyList(),
         )
@@ -238,7 +238,7 @@ class MemoProcessorTest {
             val itemObj = JSONObject()
                 .put("text", tricky)
                 .put("status", "not_started")
-                .put("tags", JSONArray())
+                .put("tags", JSONArray().put("tag"))
             itemsArr.put(itemObj)
             put("items", itemsArr)
         }.toString()

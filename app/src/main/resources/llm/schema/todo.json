@@ -17,14 +17,28 @@
           "additionalProperties": false,
           "required": ["op", "text", "status", "tags"],
           "properties": {
-            "op": { "type": "string", "enum": ["add", "update"] },
-            "text": { "type": "string", "minLength": 1 },
+            "op": {
+              "type": "string",
+              "enum": ["add", "update"]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]+$",
+              "description": "Mandatory if op=update. Must be not used or empty if op=add."
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Actionable description of the item."
+            },
             "status": {
               "type": "string",
-              "enum": ["not_started", "in_progress", "done", "not_required", "cancelled"]
+              "enum": ["not_started", "in_progress", "done", "cancelled"]
             },
             "tags": {
               "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
               "items": {
                 "type": "string",
                 "pattern": "^[a-zàèéìòóùç ]+$"
@@ -32,7 +46,17 @@
             },
             "due_date": { "type": "string", "format": "date" },
             "event_date": { "type": "string", "format": "date" }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "op": { "const": "update" } } },
+              "then": { "required": ["id"] }
+            },
+            {
+              "if": { "properties": { "op": { "const": "add" } } },
+              "then": { "not": { "required": ["id"] } }
+            }
+          ]
         }
       }
     }

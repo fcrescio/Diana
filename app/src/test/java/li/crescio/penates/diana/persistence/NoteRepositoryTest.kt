@@ -39,7 +39,7 @@ class NoteRepositoryTest {
 
         val repo = NoteRepository(firestore, file)
         val notes = listOf(
-            StructuredNote.ToDo("task", status = "not_started", tags = listOf("home"), createdAt = 1L),
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf("home"), createdAt = 1L, id = "id1"),
             StructuredNote.Memo("memo", tags = listOf("x"), createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", "office", createdAt = 3L),
             StructuredNote.Free("free", tags = listOf("y"), createdAt = 4L)
@@ -63,7 +63,7 @@ class NoteRepositoryTest {
         val file = createTempFile().toFile()
 
         val localNotes = listOf(
-            StructuredNote.ToDo("task", status = "not_started", tags = listOf(), createdAt = 100L),
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf(), createdAt = 100L, id = "id1"),
             StructuredNote.Memo("memo", tags = emptyList(), createdAt = 200L)
         )
         file.writeText(localNotes.joinToString("\n") { JSONObject(expectedMap(it)).toString() })
@@ -86,6 +86,7 @@ class NoteRepositoryTest {
         every { doc1.getString("status") } returns "done"
         every { doc1.get("tags") } returns listOf("work")
         every { doc1.getLong("createdAt") } returns 150L
+        every { doc1.id } returns "id1"
 
         every { doc2.getString("type") } returns "memo"
         every { doc2.getString("text") } returns "memo"
@@ -93,12 +94,14 @@ class NoteRepositoryTest {
         every { doc2.getString("location") } returns ""
         every { doc2.getLong("createdAt") } returns 250L
         every { doc2.get("tags") } returns listOf("remote")
+        every { doc2.id } returns "id2"
 
         every { doc3.getString("type") } returns "event"
         every { doc3.getString("text") } returns "meet"
         every { doc3.getString("datetime") } returns "2024-05-01"
         every { doc3.getString("location") } returns "office"
         every { doc3.getLong("createdAt") } returns 300L
+        every { doc3.id } returns "id3"
 
         val repo = NoteRepository(firestore, file)
 
@@ -107,7 +110,7 @@ class NoteRepositoryTest {
         val expected = listOf(
             StructuredNote.Event("meet", "2024-05-01", "office", createdAt = 300L),
             StructuredNote.Memo("memo", tags = emptyList(), createdAt = 200L),
-            StructuredNote.ToDo("task", status = "not_started", tags = listOf(), createdAt = 100L)
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf(), createdAt = 100L, id = "id1")
         )
 
         assertEquals(expected, result)
@@ -123,8 +126,8 @@ class NoteRepositoryTest {
             appointments = "",
             thoughts = "",
             todoItems = listOf(
-                TodoItem("task one", "not_started", emptyList()),
-                TodoItem("task two", "done", listOf("tag"))
+                TodoItem("task one", "not_started", emptyList(), id = "id1"),
+                TodoItem("task two", "done", listOf("tag"), id = "id2")
             ),
             appointmentItems = listOf(
                 Appointment("meet Alice", "", ""),
@@ -149,8 +152,8 @@ class NoteRepositoryTest {
         val result = method.invoke(repo, summary, true, true, true) as List<StructuredNote>
 
         val expected = listOf(
-            StructuredNote.ToDo("task one", status = "not_started", tags = emptyList(), createdAt = (result[0] as StructuredNote.ToDo).createdAt),
-            StructuredNote.ToDo("task two", status = "done", tags = listOf("tag"), createdAt = (result[1] as StructuredNote.ToDo).createdAt),
+            StructuredNote.ToDo("task one", status = "not_started", tags = emptyList(), createdAt = (result[0] as StructuredNote.ToDo).createdAt, id = "id1"),
+            StructuredNote.ToDo("task two", status = "done", tags = listOf("tag"), createdAt = (result[1] as StructuredNote.ToDo).createdAt, id = "id2"),
             StructuredNote.Event("meet Alice", "", "", createdAt = (result[2] as StructuredNote.Event).createdAt),
             StructuredNote.Event("meet Bob", "", "", createdAt = (result[3] as StructuredNote.Event).createdAt),
             StructuredNote.Memo("idea one", tags = listOf("a"), createdAt = (result[4] as StructuredNote.Memo).createdAt),
@@ -171,7 +174,7 @@ class NoteRepositoryTest {
             .apply { isAccessible = true }
 
         val notes = listOf(
-            StructuredNote.ToDo("task", status = "not_started", tags = listOf("x"), createdAt = 1L),
+            StructuredNote.ToDo("task", status = "not_started", tags = listOf("x"), createdAt = 1L, id = "id1"),
             StructuredNote.Memo("memo", tags = listOf("t"), createdAt = 2L),
             StructuredNote.Event("meet", "2024-05-01", "home", createdAt = 3L),
             StructuredNote.Free("free", tags = listOf("z"), createdAt = 4L)
@@ -188,28 +191,22 @@ class NoteRepositoryTest {
     fun deleteTodoItem_removesFromFileAndFirestore() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
         val file = createTempFile().toFile()
-        val todo1 = StructuredNote.ToDo("task1", status = "not_started", tags = emptyList(), createdAt = 1L)
-        val todo2 = StructuredNote.ToDo("task2", status = "not_started", tags = emptyList(), createdAt = 2L)
+        val todo1 = StructuredNote.ToDo("task1", status = "not_started", tags = emptyList(), createdAt = 1L, id = "id1")
+        val todo2 = StructuredNote.ToDo("task2", status = "not_started", tags = emptyList(), createdAt = 2L, id = "id2")
         val memo = StructuredNote.Memo("memo", tags = emptyList(), createdAt = 3L)
         file.writeText(listOf(todo1, todo2, memo).joinToString("\n") { JSONObject(expectedMap(it)).toString() })
 
         val firestore = mockk<FirebaseFirestore>()
         val collection = mockk<CollectionReference>()
-        val querySnapshot = mockk<QuerySnapshot>()
-        val doc = mockk<DocumentSnapshot>()
         val docRef = mockk<DocumentReference>()
 
         every { firestore.collection("notes") } returns collection
-        every { collection.whereEqualTo("type", "todo") } returns collection
-        every { collection.whereEqualTo("text", "task1") } returns collection
-        every { collection.get() } returns Tasks.forResult(querySnapshot)
-        every { querySnapshot.documents } returns listOf(doc)
-        every { doc.reference } returns docRef
+        every { collection.document("id1") } returns docRef
         every { docRef.delete() } returns Tasks.forResult(null)
 
         val repo = NoteRepository(firestore, file)
 
-        repo.deleteTodoItem("task1")
+        repo.deleteTodoItem("id1")
 
         val remaining = file.readLines().map { lineToMap(it) }
         val expected = listOf(expectedMap(todo2), expectedMap(memo))
@@ -262,7 +259,8 @@ class NoteRepositoryTest {
             "eventDate" to note.eventDate,
             "datetime" to "",
             "location" to "",
-            "createdAt" to note.createdAt
+            "createdAt" to note.createdAt,
+            "id" to note.id
         )
         is StructuredNote.Memo -> mapOf<String, Any>(
             "type" to "memo",
@@ -304,6 +302,7 @@ class NoteRepositoryTest {
         }
         obj.optString("dueDate", null)?.let { map["dueDate"] = it }
         obj.optString("eventDate", null)?.let { map["eventDate"] = it }
+        obj.optString("id", null)?.let { map["id"] = it }
         return map
     }
 }
