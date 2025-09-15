@@ -45,7 +45,7 @@ class NoteRepository(
                         val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                         val dueDate = doc.getString("dueDate") ?: ""
                         val eventDate = doc.getString("eventDate") ?: ""
-                        StructuredNote.ToDo(it, status, tags, dueDate, eventDate, createdAt)
+                        StructuredNote.ToDo(it, status, tags, dueDate, eventDate, createdAt, doc.id)
                     }
                     "memo" -> text?.let {
                         val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -73,22 +73,15 @@ class NoteRepository(
 
     suspend fun clearThoughts() = clearTypes("memo", "free")
 
-    suspend fun deleteTodoItem(text: String) {
+    suspend fun deleteTodoItem(id: String) {
         if (file.exists()) {
             val remaining = file.readLines().mapNotNull { parse(it) }
-                .filterNot { note -> note is StructuredNote.ToDo && note.text == text }
+                .filterNot { note -> note is StructuredNote.ToDo && note.id == id }
             file.writeText(remaining.joinToString("\n") { toJson(it) })
         }
 
         try {
-            val snapshot = firestore.collection("notes")
-                .whereEqualTo("type", "todo")
-                .whereEqualTo("text", text)
-                .get()
-                .await()
-            for (doc in snapshot.documents) {
-                doc.reference.delete().await()
-            }
+            firestore.collection("notes").document(id).delete().await()
         } catch (_: Exception) {
             // ignore failures
         }
@@ -151,7 +144,7 @@ class NoteRepository(
     }
 
     private fun noteKey(note: StructuredNote): String = when (note) {
-        is StructuredNote.ToDo -> "todo:${note.text}"
+        is StructuredNote.ToDo -> "todo:${note.id.ifBlank { note.text }}"
         is StructuredNote.Memo -> "memo:${note.text}"
         is StructuredNote.Event -> "event:${note.text}|${note.datetime}|${note.location}"
         is StructuredNote.Free -> "free:${note.text}"
@@ -171,7 +164,8 @@ class NoteRepository(
             "eventDate" to note.eventDate,
             "datetime" to "",
             "location" to "",
-            "createdAt" to note.createdAt
+            "createdAt" to note.createdAt,
+            "id" to note.id
         )
         is StructuredNote.Memo -> mapOf(
             "type" to "memo",
@@ -213,7 +207,8 @@ class NoteRepository(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     val dueDate = obj.optString("dueDate", "")
                     val eventDate = obj.optString("eventDate", "")
-                    StructuredNote.ToDo(text, status, tags, dueDate, eventDate, createdAt)
+                    val id = obj.optString("id", "")
+                    StructuredNote.ToDo(text, status, tags, dueDate, eventDate, createdAt, id)
                 }
                 "memo" -> {
                     val tagsArr = obj.optJSONArray("tags")
@@ -242,7 +237,7 @@ class NoteRepository(
         val notes = mutableListOf<StructuredNote>()
         if (saveTodos) {
             notes += summary.todoItems.map {
-                StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate)
+                StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate, id = it.id)
             }
         }
         if (saveAppointments) {

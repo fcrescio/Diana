@@ -158,7 +158,7 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
         val eventNotes = notes.filterIsInstance<StructuredNote.Event>()
         val memoNotes = notes.filterIsInstance<StructuredNote.Memo>()
         val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
-        todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate) }
+        todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate, it.id) }
         appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
         thoughtNotes = memoNotes + freeNotes
         syncProcessor()
@@ -275,11 +275,11 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                 onTodoCheckedChange = { item, checked ->
                       val newStatus = if (checked) "done" else "not_started"
                     todoItems = todoItems.map {
-                        if (it.text == item.text) it.copy(status = newStatus) else it
+                        if (it.id == item.id) it.copy(status = newStatus) else it
                     }
                     scope.launch {
                           val todoNotes = todoItems.map {
-                              StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate)
+                              StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate, id = it.id)
                           }
                         val apptNotes = if (processAppointments) {
                             appointments.map {
@@ -292,9 +292,9 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                     }
                 },
                 onTodoDelete = { item ->
-                    todoItems = todoItems.filterNot { it.text == item.text }
+                    todoItems = todoItems.filterNot { it.id == item.id }
                     scope.launch {
-                        repository.deleteTodoItem(item.text)
+                        repository.deleteTodoItem(item.id)
                         syncProcessor()
                     }
                 },

@@ -18,7 +18,8 @@ sealed class StructuredNote(open val createdAt: Long) {
         val tags: List<String> = emptyList(),
         val dueDate: String = "",
         val eventDate: String = "",
-        override val createdAt: Long = System.currentTimeMillis()
+        override val createdAt: Long = System.currentTimeMillis(),
+        val id: String = ""
     ) : StructuredNote(createdAt)
 
     data class Memo(

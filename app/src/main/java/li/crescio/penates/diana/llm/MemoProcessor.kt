@@ -102,6 +102,7 @@ class MemoProcessor(
             itemObj.put("tags", tagsArr)
             if (item.dueDate.isNotBlank()) itemObj.put("due_date", item.dueDate)
             if (item.eventDate.isNotBlank()) itemObj.put("event_date", item.eventDate)
+            if (item.id.isNotBlank()) itemObj.put("id", item.id)
             itemsArr.put(itemObj)
         }
         obj.put("items", itemsArr)
@@ -250,12 +251,13 @@ class MemoProcessor(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     val dueDate = itemObj.optString("due_date", "")
                     val eventDate = itemObj.optString("event_date", "")
-                    if (text.isBlank()) null else op to TodoItem(text, status, tags, dueDate, eventDate)
+                    val id = itemObj.optString("id", "")
+                    if (text.isBlank()) null else op to TodoItem(text, status, tags, dueDate, eventDate, id)
                 }
-                val merged = todoItems.associateBy { it.text }.toMutableMap()
+                val merged = todoItems.associateBy { it.id.ifBlank { it.text } }.toMutableMap()
                 for ((op, item) in updates) {
                     when (op) {
-                        "add", "update" -> merged[item.text] = item
+                        "add", "update" -> merged[item.id.ifBlank { item.text }] = item
                     }
                 }
                 todoItems = merged.values.toList()
@@ -295,6 +297,7 @@ data class TodoItem(
     val tags: List<String>,
     val dueDate: String = "",
     val eventDate: String = "",
+    val id: String = "",
 )
 
 data class Appointment(val text: String, val datetime: String, val location: String)

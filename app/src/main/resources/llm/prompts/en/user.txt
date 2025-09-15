@@ -12,6 +12,7 @@ Rules:
    - For each item choose "op":
        • "update" if new memo semantically matches an existing item in prior (see #3).
        • "add" if it introduces a new actionable task.
+   - When "op" = "update", include the item's "id" from prior. When "op" = "add", do NOT include "id".
    - Always return at least one item in "items".
    - Set "date" EXACTLY to {today}.
 
@@ -29,7 +30,6 @@ Rules:
    - Default: "not_started".
    - Use "in_progress" only if new memo clearly states the task is already underway (e.g., “I’m doing it”, “sto facendo”, “ya empecé”).
    - Use "done" only if new memo explicitly says it is completed.
-   - Use "not_required" if the task is no longer necessary.
    - Use "cancelled" if the task will not be done.
    - If updating an existing item that was "done", keep "done" unless new memo clearly reopens the task.
 

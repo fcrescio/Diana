@@ -13,8 +13,9 @@ Règles :
    - Pour chaque élément, choisissez "op" :  
        • "update" si le nouveau mémo correspond sémantiquement à un élément existant dans le prior (voir #3).  
        • "add" s’il introduit une nouvelle tâche actionnable.  
-   - Retournez toujours au moins un élément dans "items".  
-   - Fixez "date" EXACTEMENT à {today}.  
+   - Lorsque "op" = "update", incluez l'« id » de l’élément du prior. Lorsque "op" = "add", n’incluez PAS d’« id ».
+   - Retournez toujours au moins un élément dans "items".
+   - Fixez "date" EXACTEMENT à {today}.
 
 3) Déduplication / correspondance (déterministe)  
    - Normalisez pour comparer : mettre en minuscules, supprimer les accents, réduire les espaces, corriger les fautes fréquentes (ex. « analisis »→« analyse », « por que »→« pourquoi »).  
@@ -28,11 +29,10 @@ Règles :
 
 5) Statut (déterministe)  
    - Par défaut : "not_started".  
-   - Utilisez "in_progress" seulement si le mémo indique clairement que la tâche est en cours (ex. « je le fais », « je suis en train »).  
-   - Utilisez "done" seulement si le mémo indique explicitement que la tâche est terminée.  
-   - Utilisez "not_required" si la tâche n’est plus nécessaire.  
-   - Utilisez "cancelled" si la tâche ne sera pas faite.  
-   - Si vous mettez à jour un élément déjà "done", gardez "done" sauf si le mémo rouvre clairement la tâche.  
+   - Utilisez "in_progress" seulement si le mémo indique clairement que la tâche est en cours (ex. « je le fais », « je suis en train »).
+   - Utilisez "done" seulement si le mémo indique explicitement que la tâche est terminée.
+   - Utilisez "cancelled" si la tâche ne sera pas faite.
+   - Si vous mettez à jour un élément déjà "done", gardez "done" sauf si le mémo rouvre clairement la tâche.
 
 6) Tags  
    - Fournissez 1–3 tags courts, tous en minuscules, dans la langue du mémo (ex. français : « santé », « échéance », « suivi »).  
