@@ -58,6 +58,33 @@ class NoteRepositoryTest {
     }
 
     @Test
+    fun saveSummary_generatesIdsForNewTodos() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val file = createTempFile().toFile()
+        val firestore = mockk<FirebaseFirestore>()
+        val collection = mockk<CollectionReference>()
+        val document = mockk<DocumentReference>()
+
+        every { firestore.collection("notes") } returns collection
+        every { collection.add(any()) } returns Tasks.forResult(document)
+        every { document.id } returns "generated"
+
+        val repo = NoteRepository(firestore, file)
+        val summary = MemoSummary(
+            todo = "",
+            appointments = "",
+            thoughts = "",
+            todoItems = listOf(TodoItem("task", "not_started", emptyList())),
+            appointmentItems = emptyList(),
+            thoughtItems = emptyList()
+        )
+
+        val result = repo.saveSummary(summary)
+
+        assertEquals("generated", result.todoItems[0].id)
+    }
+
+    @Test
     fun loadNotes_mergesLocalAndRemote_removingDuplicates_andSortsDescending() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
         val file = createTempFile().toFile()
