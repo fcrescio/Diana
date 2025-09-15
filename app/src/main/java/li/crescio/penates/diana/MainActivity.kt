@@ -123,6 +123,27 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
     var processAppointments by remember { mutableStateOf(prefs.getBoolean("process_appointments", true)) }
     var processThoughts by remember { mutableStateOf(prefs.getBoolean("process_thoughts", true)) }
 
+    fun syncProcessor() {
+        val thoughtItems = thoughtNotes.map { note ->
+            when (note) {
+                is StructuredNote.Memo -> Thought(note.text, note.tags)
+                is StructuredNote.Free -> Thought(note.text, note.tags)
+                else -> throw IllegalStateException("Unexpected note type")
+            }
+        }
+        val todoText = todoItems.joinToString("\n") { it.text }
+        val summary = MemoSummary(
+            todo = todoText,
+            appointments = appointments.joinToString("\n") { it.text },
+            thoughts = thoughtItems.joinToString("\n") { it.text },
+            todoItems = todoItems,
+            appointmentItems = appointments,
+            thoughtItems = thoughtItems
+        )
+        todo = todoText
+        scope.launch { processor.initialize(summary) }
+    }
+
     LaunchedEffect(logger) {
         logger.logFlow.collect { addLog(it) }
     }
@@ -137,28 +158,10 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
         val eventNotes = notes.filterIsInstance<StructuredNote.Event>()
         val memoNotes = notes.filterIsInstance<StructuredNote.Memo>()
         val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
-
-        todo = todoNotes.joinToString("\n") { it.text }
         todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate) }
         appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
         thoughtNotes = memoNotes + freeNotes
-        val thoughtItems = (memoNotes + freeNotes).map { note ->
-            when (note) {
-                is StructuredNote.Memo -> Thought(note.text, note.tags)
-                is StructuredNote.Free -> Thought(note.text, note.tags)
-                else -> throw IllegalStateException("Unexpected note type")
-            }
-        }
-
-        val summary = MemoSummary(
-            todo = todo,
-            appointments = appointments.joinToString("\n") { it.text },
-            thoughts = thoughtItems.joinToString("\n") { it.text },
-            todoItems = todoItems,
-            appointmentItems = appointments,
-            thoughtItems = thoughtItems
-        )
-        processor.initialize(summary)
+        syncProcessor()
     }
 
     fun processMemo(memo: Memo) {
@@ -285,18 +288,21 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                         } else emptyList()
                         val thoughtNoteList = if (processThoughts) thoughtNotes else emptyList()
                         repository.saveNotes(todoNotes + apptNotes + thoughtNoteList)
+                        syncProcessor()
                     }
                 },
                 onTodoDelete = { item ->
                     todoItems = todoItems.filterNot { it.text == item.text }
                     scope.launch {
                         repository.deleteTodoItem(item.text)
+                        syncProcessor()
                     }
                 },
                 onAppointmentDelete = { appt ->
                     appointments = appointments.filterNot { it == appt }
                     scope.launch {
                         repository.deleteAppointment(appt.text, appt.datetime, appt.location)
+                        syncProcessor()
                     }
                 }
             )
@@ -345,18 +351,21 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                         repository.clearTodos()
                         todo = ""
                         todoItems = emptyList()
+                        syncProcessor()
                     }
                 },
                 onClearAppointments = {
                     scope.launch {
                         repository.clearAppointments()
                         appointments = emptyList()
+                        syncProcessor()
                     }
                 },
                 onClearThoughts = {
                     scope.launch {
                         repository.clearThoughts()
                         thoughtNotes = emptyList()
+                        syncProcessor()
                     }
                 },
                 onBack = { screen = Screen.List }
