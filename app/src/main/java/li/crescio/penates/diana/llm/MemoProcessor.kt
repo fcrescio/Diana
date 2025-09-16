@@ -35,6 +35,7 @@ class MemoProcessor(
     private val apiKey: String,
     private val logger: LlmLogger,
     locale: Locale,
+    initialModel: String = DEFAULT_MODEL,
     private val baseUrl: String = loadResource("llm/base_url.txt").trim(),
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -42,6 +43,17 @@ class MemoProcessor(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 ) {
+
+    companion object {
+        const val DEFAULT_MODEL = "mistralai/mistral-nemo"
+
+        val AVAILABLE_MODELS = listOf(
+            DEFAULT_MODEL,
+            "openrouter/sonoma-sky-alpha",
+            "qwen/qwen3-30b-a3b",
+            "openai/gpt-oss-120b",
+        )
+    }
 
     private var todo: String = ""
     private var todoItems: List<TodoItem> = emptyList()
@@ -51,6 +63,14 @@ class MemoProcessor(
     private var thoughtItems: List<Thought> = emptyList()
 
     private val prompts = Prompts.forLocale(locale)
+
+    var model: String = normalizeModel(initialModel)
+        set(value) {
+            field = normalizeModel(value)
+        }
+
+    private fun normalizeModel(value: String): String =
+        if (AVAILABLE_MODELS.contains(value)) value else DEFAULT_MODEL
 
     private val requestTemplate = loadResource("llm/request.json")
 
@@ -143,9 +163,11 @@ class MemoProcessor(
 
     private fun buildRequest(system: String, user: String, schema: String): String {
         val encoder = JsonStringEncoder.getInstance()
+        val escapedModel = String(encoder.quoteAsString(model))
         val escapedSystem = String(encoder.quoteAsString(system))
         val escapedUser = String(encoder.quoteAsString(user))
         return requestTemplate
+            .replace("{model}", escapedModel)
             .replace("{system}", escapedSystem)
             .replace("{user}", escapedUser)
             .replace("{schema}", schema)
