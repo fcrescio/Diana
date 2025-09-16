@@ -92,7 +92,11 @@ class MainActivity : ComponentActivity() {
                             session = environment.session,
                             repository = environment.noteRepository,
                             memoRepository = environment.memoRepository,
-                            sessionRepository = sessionRepository,
+                            onUpdateSession = { updatedSession ->
+                                val persisted = sessionRepository.update(updatedSession)
+                                environment = environment.copy(session = persisted)
+                                persisted
+                            },
                             onSwitchSession = switchSession,
                         )
                     }
@@ -168,7 +172,7 @@ fun DianaApp(
     session: Session,
     repository: NoteRepository,
     memoRepository: MemoRepository,
-    sessionRepository: SessionRepository,
+    onUpdateSession: (Session) -> Session,
     @Suppress("UNUSED_PARAMETER")
     onSwitchSession: (Session) -> Unit,
 ) {
@@ -205,11 +209,13 @@ fun DianaApp(
         }
     }
 
-    var activeSession by remember(session.id) { mutableStateOf(session) }
-    var processTodos by remember(session.id) { mutableStateOf(session.settings.processTodos) }
-    var processAppointments by remember(session.id) { mutableStateOf(session.settings.processAppointments) }
-    var processThoughts by remember(session.id) { mutableStateOf(session.settings.processThoughts) }
     val sanitizedModel = sanitizeModel(session.settings.model)
+    var activeSession by remember(session.id) {
+        mutableStateOf(session.copy(settings = session.settings.copy(model = sanitizedModel)))
+    }
+    var processTodos by remember(session.id) { mutableStateOf(activeSession.settings.processTodos) }
+    var processAppointments by remember(session.id) { mutableStateOf(activeSession.settings.processAppointments) }
+    var processThoughts by remember(session.id) { mutableStateOf(activeSession.settings.processThoughts) }
     var selectedModel by remember(session.id) { mutableStateOf(sanitizedModel) }
     val processor = remember(session.id) {
         MemoProcessor(
@@ -229,26 +235,28 @@ fun DianaApp(
     }
 
     LaunchedEffect(session) {
-        activeSession = session
-        processTodos = session.settings.processTodos
-        processAppointments = session.settings.processAppointments
-        processThoughts = session.settings.processThoughts
         val sanitized = sanitizeModel(session.settings.model)
+        val sanitizedSession = session.copy(settings = session.settings.copy(model = sanitized))
+        activeSession = sanitizedSession
+        processTodos = sanitizedSession.settings.processTodos
+        processAppointments = sanitizedSession.settings.processAppointments
+        processThoughts = sanitizedSession.settings.processThoughts
         selectedModel = sanitized
         processor.model = sanitized
     }
 
     fun persistSettings(transform: (SessionSettings) -> SessionSettings): SessionSettings {
         val updatedSettings = transform(activeSession.settings)
-        val sanitizedModel = sanitizeModel(updatedSettings.model)
-        val sanitizedSettings = updatedSettings.copy(model = sanitizedModel)
-        processTodos = sanitizedSettings.processTodos
-        processAppointments = sanitizedSettings.processAppointments
-        processThoughts = sanitizedSettings.processThoughts
-        selectedModel = sanitizedSettings.model
+        val sanitizedSettings = updatedSettings.copy(model = sanitizeModel(updatedSettings.model))
         val updatedSession = activeSession.copy(settings = sanitizedSettings)
-        activeSession = sessionRepository.update(updatedSession)
-        return sanitizedSettings
+        val persistedSession = onUpdateSession(updatedSession)
+        activeSession = persistedSession
+        val finalSettings = persistedSession.settings
+        processTodos = finalSettings.processTodos
+        processAppointments = finalSettings.processAppointments
+        processThoughts = finalSettings.processThoughts
+        selectedModel = finalSettings.model
+        return finalSettings
     }
 
     fun syncProcessor() {
@@ -464,10 +472,8 @@ fun DianaApp(
             })
             Screen.Processing -> ProcessingScreen(processingText, logs)
             Screen.Settings -> SettingsScreen(
-                processTodos = processTodos,
-                processAppointments = processAppointments,
-                processThoughts = processThoughts,
-                selectedModel = selectedModel,
+                sessionName = activeSession.name,
+                settings = activeSession.settings,
                 llmModels = modelOptions,
                 onProcessTodosChange = { enabled ->
                     persistSettings { it.copy(processTodos = enabled) }
