@@ -21,9 +21,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.padding
-import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -47,7 +45,9 @@ import java.util.Locale
 import java.io.File
 import java.io.IOException
 import li.crescio.penates.diana.persistence.MemoRepository
+import li.crescio.penates.diana.session.Session
 import li.crescio.penates.diana.session.SessionRepository
+import li.crescio.penates.diana.session.SessionSettings
 
 class MainActivity : ComponentActivity() {
     private lateinit var repository: NoteRepository
@@ -56,9 +56,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionRepository = SessionRepository(filesDir)
-        val sessionId = sessionRepository.getSelected()?.id
-            ?: sessionRepository.list().firstOrNull()?.id
-            ?: "default"
+        val initialSession = sessionRepository.getSelected()
+            ?: sessionRepository.list().firstOrNull()?.also { existing ->
+                sessionRepository.setSelected(existing.id)
+            }
+            ?: sessionRepository.create("Default Session", SessionSettings()).also { created ->
+                sessionRepository.setSelected(created.id)
+            }
+        val sessionId = initialSession.id
         val notesFile = File(filesDir, "notes.txt")
         val memoFile = File(filesDir, "memos_${sessionId}.txt")
         val collectionPath = "sessions/$sessionId/notes"
@@ -87,7 +92,16 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
                     }
                 }
-                setContent { DianaTheme { DianaApp(repository, memoRepository) } }
+                setContent {
+                    DianaTheme {
+                        DianaApp(
+                            repository = repository,
+                            memoRepository = memoRepository,
+                            sessionRepository = sessionRepository,
+                            initialSession = initialSession,
+                        )
+                    }
+                }
             }
             .addOnFailureListener { e ->
                 Log.e("MainActivity", "Firebase authentication failed", e)
@@ -97,11 +111,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
+fun DianaApp(
+    repository: NoteRepository,
+    memoRepository: MemoRepository,
+    sessionRepository: SessionRepository,
+    initialSession: Session,
+) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
-    
+
     fun addLog(message: String) {
         logs.add(message)
         if (logs.size > 100) {
@@ -122,19 +141,27 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
     val retryLabel = stringResource(R.string.retry)
     val logApiKeyMissing = stringResource(R.string.api_key_missing)
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    val savedModel = remember {
-        val stored = prefs.getString("llm_model", MemoProcessor.DEFAULT_MODEL)
-        if (stored in MemoProcessor.AVAILABLE_MODELS) stored!! else MemoProcessor.DEFAULT_MODEL
+
+    fun sanitizeModel(model: String): String {
+        return if (model in MemoProcessor.AVAILABLE_MODELS) {
+            model
+        } else {
+            MemoProcessor.DEFAULT_MODEL
+        }
     }
-    var selectedModel by remember { mutableStateOf(savedModel) }
-    val processor = remember {
+
+    var activeSession by remember(initialSession.id) { mutableStateOf(initialSession) }
+    var processTodos by remember(initialSession.id) { mutableStateOf(initialSession.settings.processTodos) }
+    var processAppointments by remember(initialSession.id) { mutableStateOf(initialSession.settings.processAppointments) }
+    var processThoughts by remember(initialSession.id) { mutableStateOf(initialSession.settings.processThoughts) }
+    val initialModel = sanitizeModel(initialSession.settings.model)
+    var selectedModel by remember(initialSession.id) { mutableStateOf(initialModel) }
+    val processor = remember(initialSession.id) {
         MemoProcessor(
             BuildConfig.OPENROUTER_API_KEY,
             logger,
             Locale.getDefault(),
-            initialModel = savedModel
+            initialModel = initialModel
         )
     }
     val modelOptions = remember {
@@ -145,9 +172,19 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
             LlmModelOption("openai/gpt-oss-120b", R.string.model_gpt_oss_120b),
         )
     }
-    var processTodos by remember { mutableStateOf(prefs.getBoolean("process_todos", true)) }
-    var processAppointments by remember { mutableStateOf(prefs.getBoolean("process_appointments", true)) }
-    var processThoughts by remember { mutableStateOf(prefs.getBoolean("process_thoughts", true)) }
+
+    fun persistSettings(transform: (SessionSettings) -> SessionSettings): SessionSettings {
+        val updatedSettings = transform(activeSession.settings)
+        val sanitizedModel = sanitizeModel(updatedSettings.model)
+        val sanitizedSettings = updatedSettings.copy(model = sanitizedModel)
+        processTodos = sanitizedSettings.processTodos
+        processAppointments = sanitizedSettings.processAppointments
+        processThoughts = sanitizedSettings.processThoughts
+        selectedModel = sanitizedSettings.model
+        val updatedSession = activeSession.copy(settings = sanitizedSettings)
+        activeSession = sessionRepository.update(updatedSession)
+        return sanitizedSettings
+    }
 
     fun syncProcessor() {
         val thoughtItems = thoughtNotes.map { note ->
@@ -367,21 +404,17 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                 selectedModel = selectedModel,
                 llmModels = modelOptions,
                 onProcessTodosChange = { enabled ->
-                    processTodos = enabled
-                    prefs.edit().putBoolean("process_todos", enabled).apply()
+                    persistSettings { it.copy(processTodos = enabled) }
                 },
                 onProcessAppointmentsChange = { enabled ->
-                    processAppointments = enabled
-                    prefs.edit().putBoolean("process_appointments", enabled).apply()
+                    persistSettings { it.copy(processAppointments = enabled) }
                 },
                 onProcessThoughtsChange = { enabled ->
-                    processThoughts = enabled
-                    prefs.edit().putBoolean("process_thoughts", enabled).apply()
+                    persistSettings { it.copy(processThoughts = enabled) }
                 },
                 onModelChange = { model ->
-                    selectedModel = model
-                    prefs.edit().putString("llm_model", model).apply()
-                    processor.model = model
+                    val persisted = persistSettings { it.copy(model = model) }
+                    processor.model = persisted.model
                 },
                 onClearTodos = {
                     scope.launch {

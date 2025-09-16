@@ -13,8 +13,8 @@ data class Session(
  * Controls what data should be persisted for a session and which LLM model to use.
  */
 data class SessionSettings(
-    val saveTodos: Boolean = true,
-    val saveAppointments: Boolean = true,
-    val saveThoughts: Boolean = true,
+    val processTodos: Boolean = true,
+    val processAppointments: Boolean = true,
+    val processThoughts: Boolean = true,
     val model: String = "",
 )
