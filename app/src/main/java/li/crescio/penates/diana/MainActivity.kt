@@ -1,27 +1,43 @@
 package li.crescio.penates.diana
 
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
-import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -80,6 +96,15 @@ class MainActivity : ComponentActivity() {
                 }
                 setContent {
                     var environment by remember { mutableStateOf(initialEnvironment) }
+                    val sessionsState = remember {
+                        mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
+                    }
+                    val context = this@MainActivity
+
+                    fun refreshSessions() {
+                        sessionsState.clear()
+                        sessionsState.addAll(sessionRepository.list())
+                    }
 
                     val switchSession: (Session) -> Unit = { targetSession ->
                         sessionRepository.setSelected(targetSession.id)
@@ -87,17 +112,61 @@ class MainActivity : ComponentActivity() {
                         environment = createSessionEnvironment(resolved, firestore)
                     }
 
+                    val addSession: () -> Unit = {
+                        val name = context.generateSessionName(sessionsState.map { it.name })
+                        val created = sessionRepository.create(name, SessionSettings())
+                        refreshSessions()
+                        switchSession(created)
+                    }
+
+                    val renameSession: (Session, String) -> Unit = label@ { session, newName ->
+                        val trimmed = newName.trim()
+                        if (trimmed.isEmpty() || trimmed == session.name) {
+                            return@label
+                        }
+                        val persisted = sessionRepository.update(session.copy(name = trimmed))
+                        refreshSessions()
+                        if (environment.session.id == persisted.id) {
+                            environment = environment.copy(session = persisted)
+                        }
+                    }
+
+                    val deleteSession: (Session) -> Unit = { session ->
+                        val wasSelected = environment.session.id == session.id
+                        if (sessionRepository.delete(session.id)) {
+                            refreshSessions()
+                            val currentSelected = sessionRepository.getSelected()
+                            if (currentSelected != null) {
+                                if (wasSelected) {
+                                    switchSession(currentSelected)
+                                }
+                            } else if (sessionsState.isNotEmpty()) {
+                                switchSession(sessionsState.first())
+                            } else {
+                                val name = context.generateSessionName(sessionsState.map { it.name })
+                                val created = sessionRepository.create(name, SessionSettings())
+                                refreshSessions()
+                                switchSession(created)
+                            }
+                        }
+                    }
+
                     DianaTheme {
                         DianaApp(
                             session = environment.session,
+                            sessions = sessionsState,
                             repository = environment.noteRepository,
                             memoRepository = environment.memoRepository,
                             onUpdateSession = { updatedSession ->
                                 val persisted = sessionRepository.update(updatedSession)
                                 environment = environment.copy(session = persisted)
+                                refreshSessions()
                                 persisted
                             },
                             onSwitchSession = switchSession,
+                            onAddSession = addSession,
+                            onRenameSession = renameSession,
+                            onDeleteSession = deleteSession,
                         )
                     }
                 }
@@ -161,6 +230,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun Context.generateSessionName(existingNames: Collection<String>): String {
+    var index = existingNames.size + 1
+    while (true) {
+        val candidate = getString(R.string.session_default_name, index)
+        if (existingNames.none { it.equals(candidate, ignoreCase = false) }) {
+            return candidate
+        }
+        index++
+    }
+}
+
 private data class SessionEnvironment(
     val session: Session,
     val noteRepository: NoteRepository,
@@ -170,11 +250,14 @@ private data class SessionEnvironment(
 @Composable
 fun DianaApp(
     session: Session,
+    sessions: List<Session>,
     repository: NoteRepository,
     memoRepository: MemoRepository,
     onUpdateSession: (Session) -> Session,
-    @Suppress("UNUSED_PARAMETER")
     onSwitchSession: (Session) -> Unit,
+    onAddSession: () -> Unit,
+    onRenameSession: (Session, String) -> Unit,
+    onDeleteSession: (Session) -> Unit,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember(session.id) { mutableStateListOf<Memo>() }
@@ -351,6 +434,16 @@ fun DianaApp(
     }
 
     Scaffold(
+        topBar = {
+            SessionTabBar(
+                sessions = sessions,
+                selectedSessionId = session.id,
+                onSelectSession = onSwitchSession,
+                onAddSession = onAddSession,
+                onRenameSession = onRenameSession,
+                onDeleteSession = onDeleteSession,
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (screen == Screen.List) {
@@ -513,6 +606,177 @@ fun DianaApp(
                 onBack = { screen = Screen.List }
             )
         }
+    }
+}
+
+@Composable
+private fun SessionTabBar(
+    sessions: List<Session>,
+    selectedSessionId: String,
+    onSelectSession: (Session) -> Unit,
+    onAddSession: () -> Unit,
+    onRenameSession: (Session, String) -> Unit,
+    onDeleteSession: (Session) -> Unit,
+) {
+    val addLabel = stringResource(R.string.add_session)
+    val emptyLabel = stringResource(R.string.no_sessions)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (sessions.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(emptyLabel)
+            }
+        } else {
+            val selectedIndex = sessions.indexOfFirst { it.id == selectedSessionId }.let { index ->
+                if (index >= 0) index else 0
+            }
+            ScrollableTabRow(
+                selectedTabIndex = selectedIndex,
+                modifier = Modifier.weight(1f),
+                edgePadding = 0.dp
+            ) {
+                sessions.forEachIndexed { index, session ->
+                    SessionTab(
+                        session = session,
+                        selected = index == selectedIndex,
+                        onSelect = { onSelectSession(session) },
+                        onRename = { newName -> onRenameSession(session, newName) },
+                        onDelete = { onDeleteSession(session) }
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onAddSession) {
+            Icon(imageVector = Icons.Filled.Add, contentDescription = addLabel)
+        }
+    }
+}
+
+@Composable
+private fun SessionTab(
+    session: Session,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onRename: (String) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val renameLabel = stringResource(R.string.rename_session)
+    val deleteLabel = stringResource(R.string.delete_session)
+    val actionsLabel = stringResource(R.string.session_actions)
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    Tab(selected = selected, onClick = onSelect) {
+        Box(
+            modifier = Modifier.pointerInput(session.id) {
+                detectTapGestures(onLongPress = { menuExpanded = true })
+            }
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = session.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = actionsLabel
+                    )
+                }
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text(renameLabel) },
+                    onClick = {
+                        menuExpanded = false
+                        showRenameDialog = true
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(deleteLabel) },
+                    onClick = {
+                        menuExpanded = false
+                        showDeleteDialog = true
+                    }
+                )
+            }
+        }
+    }
+    if (showRenameDialog) {
+        var renameText by remember { mutableStateOf(session.name) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text(renameLabel) },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text(stringResource(R.string.session_name)) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = renameText.trim()
+                        if (trimmed.isNotEmpty()) {
+                            showRenameDialog = false
+                            onRename(trimmed)
+                        }
+                    },
+                    enabled = renameText.trim().isNotEmpty()
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(stringResource(R.string.delete_session_title)) },
+            text = { Text(stringResource(R.string.delete_session_message, session.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    onDelete()
+                }) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }
 
