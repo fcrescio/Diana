@@ -10,7 +10,7 @@ import java.io.File
 
 class NoteRepository(
     private val firestore: FirebaseFirestore,
-    private val collectionPath: String,
+    private val sessionId: String,
     private val file: File
 ) {
     suspend fun saveNotes(notes: List<StructuredNote>): List<StructuredNote> {
@@ -165,7 +165,10 @@ class NoteRepository(
         }
     }
 
-    private fun notesCollection() = firestore.collection(collectionPath)
+    private fun notesCollection() = firestore
+        .collection("sessions")
+        .document(sessionId)
+        .collection("notes")
 
     private fun noteKey(note: StructuredNote): String = when (note) {
         is StructuredNote.ToDo -> "todo:${note.id.ifBlank { note.text }}"
