@@ -23,18 +23,25 @@ import kotlin.io.path.createTempFile
 class NoteRepositoryTest {
 
     @Test
-    fun saveNotes_writesJsonLines_andAddsToFirestore() = runBlocking {
+    fun saveNotes_writesJsonLines_andSavesToFirestore() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
         val file = createTempFile().toFile()
         val firestore = mockk<FirebaseFirestore>()
         val collection = mockk<CollectionReference>()
         val document = mockk<DocumentReference>()
+        val existingDocument = mockk<DocumentReference>()
 
-        val captured = mutableListOf<Map<String, Any>>()
+        val capturedAdds = mutableListOf<Map<String, Any>>()
+        val capturedSet = mutableListOf<Map<String, Any>>()
         every { firestore.collection("notes") } returns collection
         every { collection.add(any()) } answers {
-            captured.add(firstArg())
+            capturedAdds.add(firstArg())
             Tasks.forResult(document)
+        }
+        every { collection.document("id1") } returns existingDocument
+        every { existingDocument.set(any()) } answers {
+            capturedSet.add(firstArg())
+            Tasks.forResult(null)
         }
 
         val repo = NoteRepository(firestore, file)
@@ -53,8 +60,10 @@ class NoteRepositoryTest {
             assertEquals(expectedMap(notes[idx]), lineToMap(line))
         }
 
-        verify(exactly = notes.size) { collection.add(any()) }
-        assertEquals(notes.map { expectedMap(it) }, captured)
+        verify(exactly = notes.size - 1) { collection.add(any()) }
+        verify(exactly = 1) { existingDocument.set(any()) }
+        assertEquals(listOf(expectedMap(notes[0])), capturedSet)
+        assertEquals(notes.drop(1).map { expectedMap(it) }, capturedAdds)
     }
 
     @Test
