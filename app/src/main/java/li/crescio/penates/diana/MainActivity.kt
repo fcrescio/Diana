@@ -47,6 +47,7 @@ import java.util.Locale
 import java.io.File
 import java.io.IOException
 import li.crescio.penates.diana.persistence.MemoRepository
+import li.crescio.penates.diana.session.SessionRepository
 
 class MainActivity : ComponentActivity() {
     private lateinit var repository: NoteRepository
@@ -54,14 +55,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val file = File(filesDir, "notes.txt")
-        val memoFile = File(filesDir, "memos.txt")
+        val sessionRepository = SessionRepository(filesDir)
+        val sessionId = sessionRepository.getSelected()?.id
+            ?: sessionRepository.list().firstOrNull()?.id
+            ?: "default"
+        val notesFile = File(filesDir, "notes.txt")
+        val memoFile = File(filesDir, "memos_${sessionId}.txt")
+        val collectionPath = "sessions/$sessionId/notes"
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener {
                 val firestore = FirebaseFirestore.getInstance()
-                repository = NoteRepository(firestore, file)
+                repository = NoteRepository(firestore, collectionPath, notesFile)
                 memoRepository = MemoRepository(memoFile)
                 val testDoc = firestore.collection("test").document("init")
                 testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {

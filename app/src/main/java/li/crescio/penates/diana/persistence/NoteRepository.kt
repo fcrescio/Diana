@@ -10,11 +10,12 @@ import java.io.File
 
 class NoteRepository(
     private val firestore: FirebaseFirestore,
+    private val collectionPath: String,
     private val file: File
 ) {
     suspend fun saveNotes(notes: List<StructuredNote>): List<StructuredNote> {
         val saved = mutableListOf<StructuredNote>()
-        val collection = firestore.collection("notes")
+        val collection = notesCollection()
         for (note in notes) {
             val updated = if (note is StructuredNote.ToDo && note.id.isNotBlank()) {
                 collection.document(note.id).set(noteToMap(note)).await()
@@ -54,7 +55,7 @@ class NoteRepository(
         } else emptyList()
 
         val remote = try {
-            firestore.collection("notes").get().await().documents.mapNotNull { doc ->
+            notesCollection().get().await().documents.mapNotNull { doc ->
                 val type = doc.getString("type")
                 val text = doc.getString("text")
                 val datetime = doc.getString("datetime") ?: ""
@@ -102,7 +103,7 @@ class NoteRepository(
         }
 
         try {
-            firestore.collection("notes").document(id).delete().await()
+            notesCollection().document(id).delete().await()
         } catch (_: Exception) {
             // ignore failures
         }
@@ -121,7 +122,7 @@ class NoteRepository(
         }
 
         try {
-            val snapshot = firestore.collection("notes")
+            val snapshot = notesCollection()
                 .whereEqualTo("type", "event")
                 .whereEqualTo("text", text)
                 .whereEqualTo("datetime", datetime)
@@ -151,7 +152,7 @@ class NoteRepository(
 
         for (type in types) {
             try {
-                val snapshot = firestore.collection("notes")
+                val snapshot = notesCollection()
                     .whereEqualTo("type", type)
                     .get()
                     .await()
@@ -163,6 +164,8 @@ class NoteRepository(
             }
         }
     }
+
+    private fun notesCollection() = firestore.collection(collectionPath)
 
     private fun noteKey(note: StructuredNote): String = when (note) {
         is StructuredNote.ToDo -> "todo:${note.id.ifBlank { note.text }}"
