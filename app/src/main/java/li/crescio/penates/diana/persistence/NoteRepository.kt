@@ -14,11 +14,19 @@ class NoteRepository(
 ) {
     suspend fun saveNotes(notes: List<StructuredNote>): List<StructuredNote> {
         val saved = mutableListOf<StructuredNote>()
+        val collection = firestore.collection("notes")
         for (note in notes) {
-            val doc = firestore.collection("notes").add(noteToMap(note)).await()
-            val updated = if (note is StructuredNote.ToDo && note.id.isBlank()) {
-                note.copy(id = doc.id)
-            } else note
+            val updated = if (note is StructuredNote.ToDo && note.id.isNotBlank()) {
+                collection.document(note.id).set(noteToMap(note)).await()
+                note
+            } else {
+                val doc = collection.add(noteToMap(note)).await()
+                if (note is StructuredNote.ToDo && note.id.isBlank()) {
+                    note.copy(id = doc.id)
+                } else {
+                    note
+                }
+            }
             saved += updated
         }
         file.writeText(saved.joinToString("\n") { toJson(it) })
