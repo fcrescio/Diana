@@ -90,9 +90,9 @@ class SessionRepository(private val filesDir: File) {
 
     private fun SessionSettings.toJson(): JSONObject {
         val obj = JSONObject()
-        obj.put("saveTodos", saveTodos)
-        obj.put("saveAppointments", saveAppointments)
-        obj.put("saveThoughts", saveThoughts)
+        obj.put("processTodos", processTodos)
+        obj.put("processAppointments", processAppointments)
+        obj.put("processThoughts", processThoughts)
         obj.put("model", model)
         return obj
     }
@@ -136,10 +136,17 @@ class SessionRepository(private val filesDir: File) {
 
     private fun parseSettings(obj: JSONObject?): SessionSettings {
         if (obj == null) return SessionSettings()
+        fun JSONObject.optBooleanWithFallback(newKey: String, oldKey: String, default: Boolean): Boolean {
+            return if (has(newKey)) {
+                optBoolean(newKey, default)
+            } else {
+                optBoolean(oldKey, default)
+            }
+        }
         return SessionSettings(
-            saveTodos = obj.optBoolean("saveTodos", true),
-            saveAppointments = obj.optBoolean("saveAppointments", true),
-            saveThoughts = obj.optBoolean("saveThoughts", true),
+            processTodos = obj.optBooleanWithFallback("processTodos", "saveTodos", true),
+            processAppointments = obj.optBooleanWithFallback("processAppointments", "saveAppointments", true),
+            processThoughts = obj.optBooleanWithFallback("processThoughts", "saveThoughts", true),
             model = obj.optString("model", ""),
         )
     }
