@@ -38,11 +38,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.llm.TodoItem
@@ -69,105 +71,110 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionRepository = SessionRepository(filesDir)
-        val initialSession = ensureInitialSession(sessionRepository)
+        val sessionInitialization = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener {
                 val firestore = FirebaseFirestore.getInstance()
-                val initialEnvironment = createSessionEnvironment(initialSession, firestore)
-                val testDoc = firestore.collection("test").document("init")
-                testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
-                    testDoc.get().addOnFailureListener { e ->
+                lifecycleScope.launch {
+                    if (sessionInitialization.createdDefaultSession) {
+                        migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
+                    }
+                    val initialEnvironment = createSessionEnvironment(sessionInitialization.session, firestore)
+                    val testDoc = firestore.collection("test").document("init")
+                    testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
+                        testDoc.get().addOnFailureListener { e ->
+                            if (e is FirebaseFirestoreException &&
+                                e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                            ) {
+                                Log.e("MainActivity", permissionMessage, e)
+                                Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }.addOnFailureListener { e ->
                         if (e is FirebaseFirestoreException &&
                             e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
                         ) {
                             Log.e("MainActivity", permissionMessage, e)
-                            Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
                         }
                     }
-                }.addOnFailureListener { e ->
-                    if (e is FirebaseFirestoreException &&
-                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-                    ) {
-                        Log.e("MainActivity", permissionMessage, e)
-                        Toast.makeText(this, permissionMessage, Toast.LENGTH_LONG).show()
-                    }
-                }
-                setContent {
-                    var environment by remember { mutableStateOf(initialEnvironment) }
-                    val sessionsState = remember {
-                        mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
-                    }
-                    val context = this@MainActivity
-
-                    fun refreshSessions() {
-                        sessionsState.clear()
-                        sessionsState.addAll(sessionRepository.list())
-                    }
-
-                    val switchSession: (Session) -> Unit = { targetSession ->
-                        sessionRepository.setSelected(targetSession.id)
-                        val resolved = sessionRepository.getSelected() ?: targetSession
-                        environment = createSessionEnvironment(resolved, firestore)
-                    }
-
-                    val addSession: () -> Unit = {
-                        val name = context.generateSessionName(sessionsState.map { it.name })
-                        val created = sessionRepository.create(name, SessionSettings())
-                        refreshSessions()
-                        switchSession(created)
-                    }
-
-                    val renameSession: (Session, String) -> Unit = label@ { session, newName ->
-                        val trimmed = newName.trim()
-                        if (trimmed.isEmpty() || trimmed == session.name) {
-                            return@label
+                    setContent {
+                        var environment by remember { mutableStateOf(initialEnvironment) }
+                        val sessionsState = remember {
+                            mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
                         }
-                        val persisted = sessionRepository.update(session.copy(name = trimmed))
-                        refreshSessions()
-                        if (environment.session.id == persisted.id) {
-                            environment = environment.copy(session = persisted)
-                        }
-                    }
+                        val context = this@MainActivity
 
-                    val deleteSession: (Session) -> Unit = { session ->
-                        val wasSelected = environment.session.id == session.id
-                        if (sessionRepository.delete(session.id)) {
+                        fun refreshSessions() {
+                            sessionsState.clear()
+                            sessionsState.addAll(sessionRepository.list())
+                        }
+
+                        val switchSession: (Session) -> Unit = { targetSession ->
+                            sessionRepository.setSelected(targetSession.id)
+                            val resolved = sessionRepository.getSelected() ?: targetSession
+                            environment = createSessionEnvironment(resolved, firestore)
+                        }
+
+                        val addSession: () -> Unit = {
+                            val name = context.generateSessionName(sessionsState.map { it.name })
+                            val created = sessionRepository.create(name, SessionSettings())
                             refreshSessions()
-                            val currentSelected = sessionRepository.getSelected()
-                            if (currentSelected != null) {
-                                if (wasSelected) {
-                                    switchSession(currentSelected)
-                                }
-                            } else if (sessionsState.isNotEmpty()) {
-                                switchSession(sessionsState.first())
-                            } else {
-                                val name = context.generateSessionName(sessionsState.map { it.name })
-                                val created = sessionRepository.create(name, SessionSettings())
-                                refreshSessions()
-                                switchSession(created)
+                            switchSession(created)
+                        }
+
+                        val renameSession: (Session, String) -> Unit = label@ { session, newName ->
+                            val trimmed = newName.trim()
+                            if (trimmed.isEmpty() || trimmed == session.name) {
+                                return@label
+                            }
+                            val persisted = sessionRepository.update(session.copy(name = trimmed))
+                            refreshSessions()
+                            if (environment.session.id == persisted.id) {
+                                environment = environment.copy(session = persisted)
                             }
                         }
-                    }
 
-                    DianaTheme {
-                        DianaApp(
-                            session = environment.session,
-                            sessions = sessionsState,
-                            repository = environment.noteRepository,
-                            memoRepository = environment.memoRepository,
-                            onUpdateSession = { updatedSession ->
-                                val persisted = sessionRepository.update(updatedSession)
-                                environment = environment.copy(session = persisted)
+                        val deleteSession: (Session) -> Unit = { session ->
+                            val wasSelected = environment.session.id == session.id
+                            if (sessionRepository.delete(session.id)) {
                                 refreshSessions()
-                                persisted
-                            },
-                            onSwitchSession = switchSession,
-                            onAddSession = addSession,
-                            onRenameSession = renameSession,
-                            onDeleteSession = deleteSession,
-                        )
+                                val currentSelected = sessionRepository.getSelected()
+                                if (currentSelected != null) {
+                                    if (wasSelected) {
+                                        switchSession(currentSelected)
+                                    }
+                                } else if (sessionsState.isNotEmpty()) {
+                                    switchSession(sessionsState.first())
+                                } else {
+                                    val name = context.generateSessionName(sessionsState.map { it.name })
+                                    val created = sessionRepository.create(name, SessionSettings())
+                                    refreshSessions()
+                                    switchSession(created)
+                                }
+                            }
+                        }
+
+                        DianaTheme {
+                            DianaApp(
+                                session = environment.session,
+                                sessions = sessionsState,
+                                repository = environment.noteRepository,
+                                memoRepository = environment.memoRepository,
+                                onUpdateSession = { updatedSession ->
+                                    val persisted = sessionRepository.update(updatedSession)
+                                    environment = environment.copy(session = persisted)
+                                    refreshSessions()
+                                    persisted
+                                },
+                                onSwitchSession = switchSession,
+                                onAddSession = addSession,
+                                onRenameSession = renameSession,
+                                onDeleteSession = deleteSession,
+                            )
+                        }
                     }
                 }
             }
@@ -177,21 +184,21 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    private fun ensureInitialSession(sessionRepository: SessionRepository): Session {
+    private fun ensureInitialSession(sessionRepository: SessionRepository): SessionInitialization {
         val selected = sessionRepository.getSelected()
         if (selected != null) {
-            return selected
+            return SessionInitialization(selected, createdDefaultSession = false)
         }
 
         val existing = sessionRepository.list().firstOrNull()
         if (existing != null) {
             sessionRepository.setSelected(existing.id)
-            return existing
+            return SessionInitialization(existing, createdDefaultSession = false)
         }
 
         val created = sessionRepository.create("Default Session", SessionSettings())
         sessionRepository.setSelected(created.id)
-        return created
+        return SessionInitialization(created, createdDefaultSession = true)
     }
 
     private fun createSessionEnvironment(
@@ -209,12 +216,43 @@ class MainActivity : ComponentActivity() {
         migrateLegacyFile(File(filesDir, "notes.txt"), notesFile)
         migrateLegacyFile(File(filesDir, "memos_${session.id}.txt"), memoFile)
 
-        val collectionPath = "sessions/${session.id}/notes"
         return SessionEnvironment(
             session = session,
-            noteRepository = NoteRepository(firestore, collectionPath, notesFile),
+            noteRepository = NoteRepository(firestore, session.id, notesFile),
             memoRepository = MemoRepository(memoFile),
         )
+    }
+
+    private suspend fun migrateLegacyNotesCollection(
+        firestore: FirebaseFirestore,
+        sessionId: String,
+    ) {
+        try {
+            val legacyCollection = firestore.collection("notes")
+            val snapshot = legacyCollection.get().await()
+            if (snapshot.isEmpty) {
+                return
+            }
+            val sessionCollection = firestore
+                .collection("sessions")
+                .document(sessionId)
+                .collection("notes")
+            for (doc in snapshot.documents) {
+                val data = doc.data ?: continue
+                try {
+                    sessionCollection.document(doc.id).set(data).await()
+                    doc.reference.delete().await()
+                } catch (e: Exception) {
+                    Log.w(
+                        "MainActivity",
+                        "Failed to migrate document ${doc.id} from legacy notes collection",
+                        e,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Failed to migrate legacy notes collection", e)
+        }
     }
 
     private fun migrateLegacyFile(source: File, target: File) {
@@ -245,6 +283,11 @@ private data class SessionEnvironment(
     val session: Session,
     val noteRepository: NoteRepository,
     val memoRepository: MemoRepository,
+)
+
+private data class SessionInitialization(
+    val session: Session,
+    val createdDefaultSession: Boolean,
 )
 
 @Composable
