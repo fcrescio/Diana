@@ -89,10 +89,10 @@ class MainActivity : ComponentActivity() {
 
                     DianaTheme {
                         DianaApp(
+                            session = environment.session,
                             repository = environment.noteRepository,
                             memoRepository = environment.memoRepository,
                             sessionRepository = sessionRepository,
-                            currentSession = environment.session,
                             onSwitchSession = switchSession,
                         )
                     }
@@ -165,15 +165,15 @@ private data class SessionEnvironment(
 
 @Composable
 fun DianaApp(
+    session: Session,
     repository: NoteRepository,
     memoRepository: MemoRepository,
     sessionRepository: SessionRepository,
-    currentSession: Session,
     @Suppress("UNUSED_PARAMETER")
     onSwitchSession: (Session) -> Unit,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
-    val recordedMemos = remember { mutableStateListOf<Memo>() }
+    val recordedMemos = remember(session.id) { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
 
     fun addLog(message: String) {
@@ -183,10 +183,10 @@ fun DianaApp(
         }
     }
     val logger = remember { LlmLogger() }
-    var todo by remember(currentSession.id) { mutableStateOf("") }
-    var todoItems by remember(currentSession.id) { mutableStateOf(listOf<TodoItem>()) }
-    var appointments by remember(currentSession.id) { mutableStateOf(listOf<Appointment>()) }
-    var thoughtNotes by remember(currentSession.id) { mutableStateOf(listOf<StructuredNote>()) }
+    var todo by remember(session.id) { mutableStateOf("") }
+    var todoItems by remember(session.id) { mutableStateOf(listOf<TodoItem>()) }
+    var appointments by remember(session.id) { mutableStateOf(listOf<Appointment>()) }
+    var thoughtNotes by remember(session.id) { mutableStateOf(listOf<StructuredNote>()) }
     val scope = rememberCoroutineScope()
     val player: Player = remember { AndroidPlayer() }
     val logRecorded = stringResource(R.string.log_recorded_memo)
@@ -205,18 +205,18 @@ fun DianaApp(
         }
     }
 
-    var activeSession by remember(currentSession.id) { mutableStateOf(currentSession) }
-    var processTodos by remember(currentSession.id) { mutableStateOf(currentSession.settings.processTodos) }
-    var processAppointments by remember(currentSession.id) { mutableStateOf(currentSession.settings.processAppointments) }
-    var processThoughts by remember(currentSession.id) { mutableStateOf(currentSession.settings.processThoughts) }
-    val initialModel = sanitizeModel(currentSession.settings.model)
-    var selectedModel by remember(currentSession.id) { mutableStateOf(initialModel) }
-    val processor = remember(currentSession.id) {
+    var activeSession by remember(session.id) { mutableStateOf(session) }
+    var processTodos by remember(session.id) { mutableStateOf(session.settings.processTodos) }
+    var processAppointments by remember(session.id) { mutableStateOf(session.settings.processAppointments) }
+    var processThoughts by remember(session.id) { mutableStateOf(session.settings.processThoughts) }
+    val sanitizedModel = sanitizeModel(session.settings.model)
+    var selectedModel by remember(session.id) { mutableStateOf(sanitizedModel) }
+    val processor = remember(session.id) {
         MemoProcessor(
             BuildConfig.OPENROUTER_API_KEY,
             logger,
             Locale.getDefault(),
-            initialModel = initialModel
+            initialModel = sanitizedModel
         )
     }
     val modelOptions = remember {
@@ -226,6 +226,16 @@ fun DianaApp(
             LlmModelOption("qwen/qwen3-30b-a3b", R.string.model_qwen_a3b),
             LlmModelOption("openai/gpt-oss-120b", R.string.model_gpt_oss_120b),
         )
+    }
+
+    LaunchedEffect(session) {
+        activeSession = session
+        processTodos = session.settings.processTodos
+        processAppointments = session.settings.processAppointments
+        processThoughts = session.settings.processThoughts
+        val sanitized = sanitizeModel(session.settings.model)
+        selectedModel = sanitized
+        processor.model = sanitized
     }
 
     fun persistSettings(transform: (SessionSettings) -> SessionSettings): SessionSettings {
@@ -266,12 +276,12 @@ fun DianaApp(
         logger.logFlow.collect { addLog(it) }
     }
 
-    LaunchedEffect(memoRepository) {
+    LaunchedEffect(session, memoRepository) {
         recordedMemos.clear()
         recordedMemos.addAll(memoRepository.loadMemos())
     }
 
-    LaunchedEffect(repository) {
+    LaunchedEffect(session, repository) {
         val notes = repository.loadNotes()
         val todoNotes = notes.filterIsInstance<StructuredNote.ToDo>()
         val eventNotes = notes.filterIsInstance<StructuredNote.Event>()
