@@ -108,7 +108,6 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
     var appointments by remember { mutableStateOf(listOf<Appointment>()) }
     var thoughtNotes by remember { mutableStateOf(listOf<StructuredNote>()) }
     val scope = rememberCoroutineScope()
-    val processor = remember { MemoProcessor(BuildConfig.OPENROUTER_API_KEY, logger, Locale.getDefault()) }
     val player: Player = remember { AndroidPlayer() }
     val logRecorded = stringResource(R.string.log_recorded_memo)
     val logAdded = stringResource(R.string.log_added_memo)
@@ -119,6 +118,27 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    val savedModel = remember {
+        val stored = prefs.getString("llm_model", MemoProcessor.DEFAULT_MODEL)
+        if (stored in MemoProcessor.AVAILABLE_MODELS) stored!! else MemoProcessor.DEFAULT_MODEL
+    }
+    var selectedModel by remember { mutableStateOf(savedModel) }
+    val processor = remember {
+        MemoProcessor(
+            BuildConfig.OPENROUTER_API_KEY,
+            logger,
+            Locale.getDefault(),
+            initialModel = savedModel
+        )
+    }
+    val modelOptions = remember {
+        listOf(
+            LlmModelOption(MemoProcessor.DEFAULT_MODEL, R.string.model_mistral_nemo),
+            LlmModelOption("openrouter/sonoma-sky-alpha", R.string.model_sonoma_sky_alpha),
+            LlmModelOption("qwen/qwen3-30b-a3b", R.string.model_qwen_a3b),
+            LlmModelOption("openai/gpt-oss-120b", R.string.model_gpt_oss_120b),
+        )
+    }
     var processTodos by remember { mutableStateOf(prefs.getBoolean("process_todos", true)) }
     var processAppointments by remember { mutableStateOf(prefs.getBoolean("process_appointments", true)) }
     var processThoughts by remember { mutableStateOf(prefs.getBoolean("process_thoughts", true)) }
@@ -338,6 +358,8 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                 processTodos = processTodos,
                 processAppointments = processAppointments,
                 processThoughts = processThoughts,
+                selectedModel = selectedModel,
+                llmModels = modelOptions,
                 onProcessTodosChange = { enabled ->
                     processTodos = enabled
                     prefs.edit().putBoolean("process_todos", enabled).apply()
@@ -349,6 +371,11 @@ fun DianaApp(repository: NoteRepository, memoRepository: MemoRepository) {
                 onProcessThoughtsChange = { enabled ->
                     processThoughts = enabled
                     prefs.edit().putBoolean("process_thoughts", enabled).apply()
+                },
+                onModelChange = { model ->
+                    selectedModel = model
+                    prefs.edit().putString("llm_model", model).apply()
+                    processor.model = model
                 },
                 onClearTodos = {
                     scope.launch {

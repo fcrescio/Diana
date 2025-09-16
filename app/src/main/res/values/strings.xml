@@ -36,4 +36,9 @@
     <string name="process_todo">Process to-dos</string>
     <string name="process_appointments">Process appointments</string>
     <string name="process_thoughts">Process thoughts</string>
+    <string name="llm_model">LLM model</string>
+    <string name="model_mistral_nemo">Mistral Nemo (default)</string>
+    <string name="model_sonoma_sky_alpha">Sonoma Sky Alpha</string>
+    <string name="model_qwen_a3b">Qwen3 30B A3B</string>
+    <string name="model_gpt_oss_120b">GPT-OSS 120B</string>
 </resources>

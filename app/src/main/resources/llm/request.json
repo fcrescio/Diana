@@ -1,5 +1,5 @@
 {
-  "model": "mistralai/mistral-nemo",
+  "model": "{model}",
   "messages": [
     {"role":"system","content":"{system}"},
     {"role":"user","content":"{user}"}
