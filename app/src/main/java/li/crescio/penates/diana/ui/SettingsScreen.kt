@@ -3,6 +3,7 @@ package li.crescio.penates.diana.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -14,15 +15,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import li.crescio.penates.diana.R
+import li.crescio.penates.diana.session.SessionSettings
 
 data class LlmModelOption(val id: String, @StringRes val labelResId: Int)
 
 @Composable
 fun SettingsScreen(
-    processTodos: Boolean,
-    processAppointments: Boolean,
-    processThoughts: Boolean,
-    selectedModel: String,
+    sessionName: String,
+    settings: SessionSettings,
     llmModels: List<LlmModelOption>,
     onProcessTodosChange: (Boolean) -> Unit,
     onProcessAppointmentsChange: (Boolean) -> Unit,
@@ -48,13 +48,20 @@ fun SettingsScreen(
                 .weight(1f)
                 .padding(horizontal = 16.dp)
         ) {
+            Text(
+                text = stringResource(R.string.editing_session, sessionName),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.process_todo))
                 Spacer(modifier = Modifier.weight(1f))
-                Switch(checked = processTodos, onCheckedChange = onProcessTodosChange)
+                Switch(checked = settings.processTodos, onCheckedChange = onProcessTodosChange)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -63,7 +70,7 @@ fun SettingsScreen(
             ) {
                 Text(stringResource(R.string.process_appointments))
                 Spacer(modifier = Modifier.weight(1f))
-                Switch(checked = processAppointments, onCheckedChange = onProcessAppointmentsChange)
+                Switch(checked = settings.processAppointments, onCheckedChange = onProcessAppointmentsChange)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -72,7 +79,7 @@ fun SettingsScreen(
             ) {
                 Text(stringResource(R.string.process_thoughts))
                 Spacer(modifier = Modifier.weight(1f))
-                Switch(checked = processThoughts, onCheckedChange = onProcessThoughtsChange)
+                Switch(checked = settings.processThoughts, onCheckedChange = onProcessThoughtsChange)
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(stringResource(R.string.llm_model))
@@ -84,14 +91,14 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .selectable(
-                            selected = option.id == selectedModel,
+                            selected = option.id == settings.model,
                             onClick = { onModelChange(option.id) },
                             role = Role.RadioButton
                         )
                         .padding(vertical = 4.dp)
                 ) {
                     RadioButton(
-                        selected = option.id == selectedModel,
+                        selected = option.id == settings.model,
                         onClick = null
                     )
                     Spacer(modifier = Modifier.width(8.dp))
