@@ -50,30 +50,16 @@ import li.crescio.penates.diana.session.SessionRepository
 import li.crescio.penates.diana.session.SessionSettings
 
 class MainActivity : ComponentActivity() {
-    private lateinit var repository: NoteRepository
-    private lateinit var memoRepository: MemoRepository
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionRepository = SessionRepository(filesDir)
-        val initialSession = sessionRepository.getSelected()
-            ?: sessionRepository.list().firstOrNull()?.also { existing ->
-                sessionRepository.setSelected(existing.id)
-            }
-            ?: sessionRepository.create("Default Session", SessionSettings()).also { created ->
-                sessionRepository.setSelected(created.id)
-            }
-        val sessionId = initialSession.id
-        val notesFile = File(filesDir, "notes.txt")
-        val memoFile = File(filesDir, "memos_${sessionId}.txt")
-        val collectionPath = "sessions/$sessionId/notes"
+        val initialSession = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener {
                 val firestore = FirebaseFirestore.getInstance()
-                repository = NoteRepository(firestore, collectionPath, notesFile)
-                memoRepository = MemoRepository(memoFile)
+                val initialEnvironment = createSessionEnvironment(initialSession, firestore)
                 val testDoc = firestore.collection("test").document("init")
                 testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
                     testDoc.get().addOnFailureListener { e ->
@@ -93,12 +79,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 setContent {
+                    var environment by remember { mutableStateOf(initialEnvironment) }
+
+                    val switchSession: (Session) -> Unit = { targetSession ->
+                        sessionRepository.setSelected(targetSession.id)
+                        val resolved = sessionRepository.getSelected() ?: targetSession
+                        environment = createSessionEnvironment(resolved, firestore)
+                    }
+
                     DianaTheme {
                         DianaApp(
-                            repository = repository,
-                            memoRepository = memoRepository,
+                            repository = environment.noteRepository,
+                            memoRepository = environment.memoRepository,
                             sessionRepository = sessionRepository,
-                            initialSession = initialSession,
+                            currentSession = environment.session,
+                            onSwitchSession = switchSession,
                         )
                     }
                 }
@@ -108,14 +103,74 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Authentication failed", Toast.LENGTH_LONG).show()
             }
     }
+
+    private fun ensureInitialSession(sessionRepository: SessionRepository): Session {
+        val selected = sessionRepository.getSelected()
+        if (selected != null) {
+            return selected
+        }
+
+        val existing = sessionRepository.list().firstOrNull()
+        if (existing != null) {
+            sessionRepository.setSelected(existing.id)
+            return existing
+        }
+
+        val created = sessionRepository.create("Default Session", SessionSettings())
+        sessionRepository.setSelected(created.id)
+        return created
+    }
+
+    private fun createSessionEnvironment(
+        session: Session,
+        firestore: FirebaseFirestore,
+    ): SessionEnvironment {
+        val sessionDir = File(filesDir, "sessions/${session.id}")
+        if (!sessionDir.exists()) {
+            sessionDir.mkdirs()
+        }
+
+        val notesFile = File(sessionDir, "notes.txt")
+        val memoFile = File(sessionDir, "memos.txt")
+
+        migrateLegacyFile(File(filesDir, "notes.txt"), notesFile)
+        migrateLegacyFile(File(filesDir, "memos_${session.id}.txt"), memoFile)
+
+        val collectionPath = "sessions/${session.id}/notes"
+        return SessionEnvironment(
+            session = session,
+            noteRepository = NoteRepository(firestore, collectionPath, notesFile),
+            memoRepository = MemoRepository(memoFile),
+        )
+    }
+
+    private fun migrateLegacyFile(source: File, target: File) {
+        if (!source.exists() || target.exists()) {
+            return
+        }
+        try {
+            source.copyTo(target, overwrite = false)
+            source.delete()
+        } catch (e: IOException) {
+            Log.w("MainActivity", "Failed to migrate legacy file: ${source.absolutePath}", e)
+        }
+    }
 }
+
+private data class SessionEnvironment(
+    val session: Session,
+    val noteRepository: NoteRepository,
+    val memoRepository: MemoRepository,
+)
 
 @Composable
 fun DianaApp(
     repository: NoteRepository,
     memoRepository: MemoRepository,
     sessionRepository: SessionRepository,
-    initialSession: Session,
+    currentSession: Session,
+    @Suppress("UNUSED_PARAMETER")
+    onSwitchSession: (Session) -> Unit,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val recordedMemos = remember { mutableStateListOf<Memo>() }
@@ -128,10 +183,10 @@ fun DianaApp(
         }
     }
     val logger = remember { LlmLogger() }
-    var todo by remember { mutableStateOf("") }
-    var todoItems by remember { mutableStateOf(listOf<TodoItem>()) }
-    var appointments by remember { mutableStateOf(listOf<Appointment>()) }
-    var thoughtNotes by remember { mutableStateOf(listOf<StructuredNote>()) }
+    var todo by remember(currentSession.id) { mutableStateOf("") }
+    var todoItems by remember(currentSession.id) { mutableStateOf(listOf<TodoItem>()) }
+    var appointments by remember(currentSession.id) { mutableStateOf(listOf<Appointment>()) }
+    var thoughtNotes by remember(currentSession.id) { mutableStateOf(listOf<StructuredNote>()) }
     val scope = rememberCoroutineScope()
     val player: Player = remember { AndroidPlayer() }
     val logRecorded = stringResource(R.string.log_recorded_memo)
@@ -150,13 +205,13 @@ fun DianaApp(
         }
     }
 
-    var activeSession by remember(initialSession.id) { mutableStateOf(initialSession) }
-    var processTodos by remember(initialSession.id) { mutableStateOf(initialSession.settings.processTodos) }
-    var processAppointments by remember(initialSession.id) { mutableStateOf(initialSession.settings.processAppointments) }
-    var processThoughts by remember(initialSession.id) { mutableStateOf(initialSession.settings.processThoughts) }
-    val initialModel = sanitizeModel(initialSession.settings.model)
-    var selectedModel by remember(initialSession.id) { mutableStateOf(initialModel) }
-    val processor = remember(initialSession.id) {
+    var activeSession by remember(currentSession.id) { mutableStateOf(currentSession) }
+    var processTodos by remember(currentSession.id) { mutableStateOf(currentSession.settings.processTodos) }
+    var processAppointments by remember(currentSession.id) { mutableStateOf(currentSession.settings.processAppointments) }
+    var processThoughts by remember(currentSession.id) { mutableStateOf(currentSession.settings.processThoughts) }
+    val initialModel = sanitizeModel(currentSession.settings.model)
+    var selectedModel by remember(currentSession.id) { mutableStateOf(initialModel) }
+    val processor = remember(currentSession.id) {
         MemoProcessor(
             BuildConfig.OPENROUTER_API_KEY,
             logger,
@@ -212,6 +267,7 @@ fun DianaApp(
     }
 
     LaunchedEffect(memoRepository) {
+        recordedMemos.clear()
         recordedMemos.addAll(memoRepository.loadMemos())
     }
 
