@@ -21,11 +21,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayDeque
 import android.util.Log
 
-private fun loadResource(path: String): String {
-    val stream = Thread.currentThread().contextClassLoader?.getResourceAsStream(path)
-        ?: throw IOException("Resource $path not found")
-    return stream.bufferedReader().use { it.readText() }
-}
+private fun loadResource(path: String): String = LlmResources.load(path)
 
 /**
  * Maintains running text buffers for to-dos, appointments and free-form

@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.LlmLogger
+import li.crescio.penates.diana.llm.LlmResources
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.llm.Appointment
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionRepository = SessionRepository(filesDir)
+        LlmResources.initialize(File(filesDir, "llm_resources"))
         val sessionInitialization = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
@@ -76,6 +78,11 @@ class MainActivity : ComponentActivity() {
             .addOnSuccessListener {
                 val firestore = FirebaseFirestore.getInstance()
                 lifecycleScope.launch {
+                    try {
+                        LlmResources.refreshFromFirestore(firestore)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Failed to update LLM resources", e)
+                    }
                     if (sessionInitialization.createdDefaultSession) {
                         migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
                     }
