@@ -23,6 +23,9 @@
     <string name="log_transcription_failed">Transcription failed</string>
     <string name="log_llm_failed">Processing failed</string>
     <string name="retry">Retry</string>
+    <string name="abort">Abort</string>
+    <string name="groq_api_key_missing">GROQ API key missing. Unable to transcribe recording.</string>
+    <string name="log_groq_api_key_missing">GROQ API key missing</string>
     <string name="api_key_missing">OpenRouter API key missing. Memo processing disabled.</string>
     <string name="clear_todo">Clear to-do list</string>
     <string name="clear_appointments">Clear appointments</string>
