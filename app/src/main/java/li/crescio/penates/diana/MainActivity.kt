@@ -32,11 +32,9 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
@@ -540,6 +538,7 @@ fun DianaApp(
             }
         }
     ) { innerPadding ->
+        val contentModifier = Modifier.padding(innerPadding)
         when (screen) {
             Screen.List -> NotesListScreen(
                 todoItems,
@@ -549,7 +548,7 @@ fun DianaApp(
                 processTodos,
                 processAppointments,
                 processThoughts,
-                modifier = Modifier.padding(innerPadding),
+                modifier = contentModifier,
                 onTodoCheckedChange = { item, checked ->
                       val newStatus = if (checked) "done" else "not_started"
                     todoItems = todoItems.map {
@@ -588,6 +587,7 @@ fun DianaApp(
                 memoRepository = memoRepository,
                 player = player,
                 onBack = { screen = Screen.List },
+                modifier = contentModifier,
                 onReprocess = { memo ->
                     screen = Screen.Processing
                     processMemo(memo)
@@ -597,20 +597,28 @@ fun DianaApp(
                 memoRepository = memoRepository,
                 logs = logs,
                 addLog = { addLog(it) },
-                snackbarHostState = snackbarHostState
+                snackbarHostState = snackbarHostState,
+                modifier = contentModifier
             ) { memo ->
                 addLog(logRecorded)
                 screen = Screen.Processing
                 processMemo(memo)
             }
-            Screen.TextMemo -> TextMemoScreen(onSave = { text ->
-                val memo = Memo(text)
-                scope.launch { memoRepository.addMemo(memo) }
-                addLog(logAdded)
-                screen = Screen.Processing
-                processMemo(memo)
-            })
-            Screen.Processing -> ProcessingScreen(processingText, logs)
+            Screen.TextMemo -> TextMemoScreen(
+                modifier = contentModifier,
+                onSave = { text ->
+                    val memo = Memo(text)
+                    scope.launch { memoRepository.addMemo(memo) }
+                    addLog(logAdded)
+                    screen = Screen.Processing
+                    processMemo(memo)
+                }
+            )
+            Screen.Processing -> ProcessingScreen(
+                status = processingText,
+                messages = logs,
+                modifier = contentModifier
+            )
             Screen.Settings -> SettingsScreen(
                 sessionName = activeSession.name,
                 settings = activeSession.settings,
@@ -650,7 +658,8 @@ fun DianaApp(
                         syncProcessor()
                     }
                 },
-                onBack = { screen = Screen.List }
+                onBack = { screen = Screen.List },
+                modifier = contentModifier
             )
         }
     }
@@ -724,11 +733,7 @@ private fun SessionTab(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     Tab(selected = selected, onClick = onSelect) {
-        Box(
-            modifier = Modifier.pointerInput(session.id) {
-                detectTapGestures(onLongPress = { menuExpanded = true })
-            }
-        ) {
+        Box {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)

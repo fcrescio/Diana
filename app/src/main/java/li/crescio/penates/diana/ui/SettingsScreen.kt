@@ -32,8 +32,9 @@ fun SettingsScreen(
     onClearAppointments: () -> Unit,
     onClearThoughts: () -> Unit,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
