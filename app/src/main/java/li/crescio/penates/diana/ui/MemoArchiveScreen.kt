@@ -5,22 +5,29 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import li.crescio.penates.diana.R
 import li.crescio.penates.diana.notes.Memo
+import li.crescio.penates.diana.persistence.MemoRepository
 import li.crescio.penates.diana.player.Player
 
 @Composable
 fun MemoArchiveScreen(
-    memos: List<Memo>,
+    memoRepository: MemoRepository,
     player: Player,
     onBack: () -> Unit,
     onReprocess: (Memo) -> Unit
 ) {
+    var memos by remember(memoRepository) { mutableStateOf<List<Memo>>(emptyList()) }
+
+    LaunchedEffect(memoRepository) {
+        memos = memoRepository.loadMemos()
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier

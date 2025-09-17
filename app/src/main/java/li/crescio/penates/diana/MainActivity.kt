@@ -198,6 +198,7 @@ class MainActivity : ComponentActivity() {
 
         val created = sessionRepository.create("Default Session", SessionSettings())
         sessionRepository.setSelected(created.id)
+        migrateLegacyMemosToDefaultSession(created.id)
         return SessionInitialization(created, createdDefaultSession = true)
     }
 
@@ -211,16 +212,22 @@ class MainActivity : ComponentActivity() {
         }
 
         val notesFile = File(sessionDir, "notes.txt")
-        val memoFile = File(sessionDir, "memos.txt")
+        val memoFile = File(filesDir, "memos_${session.id}.txt")
 
         migrateLegacyFile(File(filesDir, "notes.txt"), notesFile)
-        migrateLegacyFile(File(filesDir, "memos_${session.id}.txt"), memoFile)
+        migrateLegacyFile(File(sessionDir, "memos.txt"), memoFile)
 
         return SessionEnvironment(
             session = session,
             noteRepository = NoteRepository(firestore, session.id, notesFile),
             memoRepository = MemoRepository(memoFile),
         )
+    }
+
+    private fun migrateLegacyMemosToDefaultSession(defaultSessionId: String) {
+        val legacyMemos = File(filesDir, "memos.txt")
+        val defaultSessionMemos = File(filesDir, "memos_${defaultSessionId}.txt")
+        migrateLegacyFile(legacyMemos, defaultSessionMemos)
     }
 
     private suspend fun migrateLegacyNotesCollection(
@@ -303,7 +310,6 @@ fun DianaApp(
     onDeleteSession: (Session) -> Unit,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
-    val recordedMemos = remember(session.id) { mutableStateListOf<Memo>() }
     val logs = remember { mutableStateListOf<String>() }
 
     fun addLog(message: String) {
@@ -408,11 +414,6 @@ fun DianaApp(
 
     LaunchedEffect(logger) {
         logger.logFlow.collect { addLog(it) }
-    }
-
-    LaunchedEffect(session, memoRepository) {
-        recordedMemos.clear()
-        recordedMemos.addAll(memoRepository.loadMemos())
     }
 
     LaunchedEffect(session, repository) {
@@ -583,24 +584,27 @@ fun DianaApp(
                     }
                 }
             )
-            Screen.Archive -> MemoArchiveScreen(recordedMemos, player, onBack = { screen = Screen.List }) { memo ->
-                screen = Screen.Processing
-                processMemo(memo)
-            }
+            Screen.Archive -> MemoArchiveScreen(
+                memoRepository = memoRepository,
+                player = player,
+                onBack = { screen = Screen.List },
+                onReprocess = { memo ->
+                    screen = Screen.Processing
+                    processMemo(memo)
+                }
+            )
             Screen.Recorder -> RecorderScreen(
-                logs,
+                memoRepository = memoRepository,
+                logs = logs,
                 addLog = { addLog(it) },
                 snackbarHostState = snackbarHostState
             ) { memo ->
-                recordedMemos.add(memo)
-                scope.launch { memoRepository.addMemo(memo) }
                 addLog(logRecorded)
                 screen = Screen.Processing
                 processMemo(memo)
             }
             Screen.TextMemo -> TextMemoScreen(onSave = { text ->
                 val memo = Memo(text)
-                recordedMemos.add(memo)
                 scope.launch { memoRepository.addMemo(memo) }
                 addLog(logAdded)
                 screen = Screen.Processing
