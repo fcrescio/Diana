@@ -20,6 +20,7 @@ fun MemoArchiveScreen(
     memoRepository: MemoRepository,
     player: Player,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     onReprocess: (Memo) -> Unit
 ) {
     var memos by remember(memoRepository) { mutableStateOf<List<Memo>>(emptyList()) }
@@ -28,7 +29,7 @@ fun MemoArchiveScreen(
         memos = memoRepository.loadMemos()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()

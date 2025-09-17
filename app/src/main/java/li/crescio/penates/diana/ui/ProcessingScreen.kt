@@ -15,8 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun ProcessingScreen(status: String, messages: List<String>) {
-    Column(modifier = Modifier.fillMaxSize()) {
+fun ProcessingScreen(status: String, messages: List<String>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .weight(1f)
