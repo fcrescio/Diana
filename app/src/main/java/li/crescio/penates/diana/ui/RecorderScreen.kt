@@ -23,9 +23,11 @@ import li.crescio.penates.diana.notes.Transcript
 import li.crescio.penates.diana.recorder.AndroidRecorder
 import li.crescio.penates.diana.transcriber.GroqTranscriber
 import li.crescio.penates.diana.R
+import li.crescio.penates.diana.persistence.MemoRepository
 
 @Composable
 fun RecorderScreen(
+    memoRepository: MemoRepository,
     logs: List<String>,
     addLog: (String) -> Unit,
     snackbarHostState: SnackbarHostState,
@@ -99,7 +101,9 @@ fun RecorderScreen(
                                 }
                             }
                         }
-                        onFinish(Memo(transcript?.text.orEmpty(), recording.filePath))
+                        val memo = Memo(transcript?.text.orEmpty(), recording.filePath)
+                        memoRepository.addMemo(memo)
+                        onFinish(memo)
                     }
                 },
                 enabled = isRecording
