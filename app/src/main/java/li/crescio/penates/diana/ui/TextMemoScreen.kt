@@ -12,10 +12,10 @@ import androidx.compose.ui.res.stringResource
 import li.crescio.penates.diana.R
 
 @Composable
-fun TextMemoScreen(onSave: (String) -> Unit) {
+fun TextMemoScreen(modifier: Modifier = Modifier, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         TextField(
             value = text,
             onValueChange = { text = it },

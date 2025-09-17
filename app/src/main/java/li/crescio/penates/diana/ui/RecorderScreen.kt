@@ -31,6 +31,7 @@ fun RecorderScreen(
     logs: List<String>,
     addLog: (String) -> Unit,
     snackbarHostState: SnackbarHostState,
+    modifier: Modifier = Modifier,
     onFinish: (Memo) -> Unit
 ) {
     val context = LocalContext.current
@@ -73,7 +74,7 @@ fun RecorderScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .weight(1f)
