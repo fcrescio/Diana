@@ -20,6 +20,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlin.io.path.createTempFile
 
+private const val SESSION_ID = "test-session"
+
 class NoteRepositoryTest {
 
     @Test
@@ -27,13 +29,17 @@ class NoteRepositoryTest {
         System.setProperty("net.bytebuddy.experimental", "true")
         val file = createTempFile().toFile()
         val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
         val collection = mockk<CollectionReference>()
         val document = mockk<DocumentReference>()
         val existingDocument = mockk<DocumentReference>()
 
         val capturedAdds = mutableListOf<Map<String, Any>>()
         val capturedSet = mutableListOf<Map<String, Any>>()
-        every { firestore.collection("notes") } returns collection
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
         every { collection.add(any()) } answers {
             capturedAdds.add(firstArg())
             Tasks.forResult(document)
@@ -44,7 +50,7 @@ class NoteRepositoryTest {
             Tasks.forResult(null)
         }
 
-        val repo = NoteRepository(firestore, file)
+        val repo = NoteRepository(firestore, SESSION_ID, file)
         val notes = listOf(
             StructuredNote.ToDo("task", status = "not_started", tags = listOf("home"), createdAt = 1L, id = "id1"),
             StructuredNote.Memo("memo", tags = listOf("x"), createdAt = 2L),
@@ -71,14 +77,18 @@ class NoteRepositoryTest {
         System.setProperty("net.bytebuddy.experimental", "true")
         val file = createTempFile().toFile()
         val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
         val collection = mockk<CollectionReference>()
         val document = mockk<DocumentReference>()
 
-        every { firestore.collection("notes") } returns collection
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
         every { collection.add(any()) } returns Tasks.forResult(document)
         every { document.id } returns "generated"
 
-        val repo = NoteRepository(firestore, file)
+        val repo = NoteRepository(firestore, SESSION_ID, file)
         val summary = MemoSummary(
             todo = "",
             appointments = "",
@@ -105,13 +115,17 @@ class NoteRepositoryTest {
         file.writeText(localNotes.joinToString("\n") { JSONObject(expectedMap(it)).toString() })
 
         val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
         val collection = mockk<CollectionReference>()
         val querySnapshot = mockk<QuerySnapshot>()
         val doc1 = mockk<DocumentSnapshot>(relaxed = true)
         val doc2 = mockk<DocumentSnapshot>(relaxed = true)
         val doc3 = mockk<DocumentSnapshot>(relaxed = true)
 
-        every { firestore.collection("notes") } returns collection
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
         every { collection.get() } returns Tasks.forResult(querySnapshot)
         every { querySnapshot.documents } returns listOf(doc1, doc2, doc3)
 
@@ -139,7 +153,7 @@ class NoteRepositoryTest {
         every { doc3.getLong("createdAt") } returns 300L
         every { doc3.id } returns "id3"
 
-        val repo = NoteRepository(firestore, file)
+        val repo = NoteRepository(firestore, SESSION_ID, file)
 
         val result = repo.loadNotes()
 
@@ -155,7 +169,7 @@ class NoteRepositoryTest {
     @Test
     fun summaryToNotes_mapsThoughtItems() {
         System.setProperty("net.bytebuddy.experimental", "true")
-        val repo = NoteRepository(mockk(), createTempFile().toFile())
+        val repo = NoteRepository(mockk(), SESSION_ID, createTempFile().toFile())
 
         val summary = MemoSummary(
             todo = "",
@@ -202,7 +216,7 @@ class NoteRepositoryTest {
     @Test
     fun toJsonAndParse_roundTrip_returnsOriginalNote() {
         System.setProperty("net.bytebuddy.experimental", "true")
-        val repo = NoteRepository(mockk(), createTempFile().toFile())
+        val repo = NoteRepository(mockk(), SESSION_ID, createTempFile().toFile())
 
         val toJson = NoteRepository::class.java.getDeclaredMethod("toJson", StructuredNote::class.java)
             .apply { isAccessible = true }
@@ -233,14 +247,18 @@ class NoteRepositoryTest {
         file.writeText(listOf(todo1, todo2, memo).joinToString("\n") { JSONObject(expectedMap(it)).toString() })
 
         val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
         val collection = mockk<CollectionReference>()
         val docRef = mockk<DocumentReference>()
 
-        every { firestore.collection("notes") } returns collection
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
         every { collection.document("id1") } returns docRef
         every { docRef.delete() } returns Tasks.forResult(null)
 
-        val repo = NoteRepository(firestore, file)
+        val repo = NoteRepository(firestore, SESSION_ID, file)
 
         repo.deleteTodoItem("id1")
 
@@ -260,12 +278,16 @@ class NoteRepositoryTest {
         file.writeText(listOf(appt1, appt2, memo).joinToString("\n") { JSONObject(expectedMap(it)).toString() })
 
         val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
         val collection = mockk<CollectionReference>()
         val querySnapshot = mockk<QuerySnapshot>()
         val doc = mockk<DocumentSnapshot>()
         val docRef = mockk<DocumentReference>()
 
-        every { firestore.collection("notes") } returns collection
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
         every { collection.whereEqualTo("type", "event") } returns collection
         every { collection.whereEqualTo("text", "meet") } returns collection
         every { collection.whereEqualTo("datetime", "2024-05-01T10:00:00Z") } returns collection
@@ -275,7 +297,7 @@ class NoteRepositoryTest {
         every { doc.reference } returns docRef
         every { docRef.delete() } returns Tasks.forResult(null)
 
-        val repo = NoteRepository(firestore, file)
+        val repo = NoteRepository(firestore, SESSION_ID, file)
 
         repo.deleteAppointment("meet", "2024-05-01T10:00:00Z", "office")
 

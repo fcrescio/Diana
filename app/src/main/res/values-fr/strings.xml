@@ -34,4 +34,13 @@
     <string name="process_todo">Traiter les tâches</string>
     <string name="process_appointments">Traiter les rendez-vous</string>
     <string name="process_thoughts">Traiter les pensées</string>
+    <string name="add_session">Ajouter une session</string>
+    <string name="session_default_name">Session %1$d</string>
+    <string name="rename_session">Renommer la session</string>
+    <string name="delete_session">Supprimer la session</string>
+    <string name="session_name">Nom de la session</string>
+    <string name="delete_session_title">Supprimer la session</string>
+    <string name="delete_session_message">Voulez-vous vraiment supprimer %1$s ?</string>
+    <string name="session_actions">Options de session</string>
+    <string name="no_sessions">Aucune session</string>
 </resources>
