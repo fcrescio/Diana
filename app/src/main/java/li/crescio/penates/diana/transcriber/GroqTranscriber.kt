@@ -24,6 +24,9 @@ class GroqTranscriber(private val apiKey: String) : Transcriber {
 
     override suspend fun transcribe(recording: RawRecording): Transcript =
         withContext(Dispatchers.IO) {
+            if (apiKey.isBlank()) {
+                throw IllegalStateException("GROQ API key is missing")
+            }
             val audioFile = File(recording.filePath)
             val body = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -44,8 +47,23 @@ class GroqTranscriber(private val apiKey: String) : Transcriber {
 
             try {
                 client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw IOException("Unexpected code $response")
-                    val json = JSONObject(response.body?.string().orEmpty())
+                    val rawBody = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        val parsedError = runCatching {
+                            val json = JSONObject(rawBody)
+                            when {
+                                json.has("error") -> {
+                                    json.optJSONObject("error")?.optString("message")
+                                }
+                                json.has("message") -> json.optString("message")
+                                else -> null
+                            }
+                        }.getOrNull()
+                        val errorMessage = parsedError?.takeIf { it.isNotBlank() }
+                            ?: "HTTP ${response.code}"
+                        throw IOException("Groq transcription failed: $errorMessage")
+                    }
+                    val json = JSONObject(rawBody)
                     val text = json.optString("text", "")
                     Transcript(text)
                 }
