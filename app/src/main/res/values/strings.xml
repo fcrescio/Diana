@@ -56,4 +56,13 @@
     <string name="no_sessions">No sessions</string>
     <string name="delete_memo_title">Delete memo</string>
     <string name="delete_memo_message">Are you sure you want to delete this memo?</string>
+    <string name="import_remote_sessions">Import sessions</string>
+    <string name="import_remote_sessions_title">Import remote sessions</string>
+    <string name="no_remote_sessions">No remote sessions available.</string>
+    <string name="remote_session_settings">To-dos: %1$s • Appointments: %2$s • Thoughts: %3$s • Model: %4$s</string>
+    <string name="setting_enabled">On</string>
+    <string name="setting_disabled">Off</string>
+    <string name="remote_session_model_default">Default</string>
+    <string name="import_session_action">Import</string>
+    <string name="close">Close</string>
 </resources>
