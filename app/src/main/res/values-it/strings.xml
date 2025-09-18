@@ -43,4 +43,6 @@
     <string name="delete_session_message">Sei sicuro di voler eliminare %1$s?</string>
     <string name="session_actions">Opzioni sessione</string>
     <string name="no_sessions">Nessuna sessione</string>
+    <string name="delete_memo_title">Elimina memo</string>
+    <string name="delete_memo_message">Sei sicuro di voler eliminare questo memo?</string>
 </resources>
