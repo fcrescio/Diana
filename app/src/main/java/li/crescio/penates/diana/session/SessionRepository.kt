@@ -1,17 +1,20 @@
 package li.crescio.penates.diana.session
 
 import android.util.Log
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 import java.util.UUID
 import kotlin.text.Charsets
 
@@ -124,6 +127,45 @@ class SessionRepository(
         remoteScope.launch {
             syncSelectionRemote(newSelectedId, snapshot, previousSelectedId)
         }
+    }
+
+    suspend fun fetchRemoteSessions(): List<Session> = withContext(remoteDispatcher) {
+        val (localSessions, selectedId) = synchronized(lock) {
+            sessions.toList() to selectedSessionId
+        }
+        val snapshot = firestore.collection("sessions").get().await()
+        val remoteSessions = mutableListOf<Session>()
+        for (document in snapshot.documents) {
+            val session = parseRemoteSession(document)
+            if (session != null) {
+                remoteSessions += session
+            }
+        }
+        val remoteIds = remoteSessions.map { it.id }.toSet()
+        val localIds = localSessions.map { it.id }.toSet()
+        val missingRemote = localSessions.filter { it.id !in remoteIds }
+        for (session in missingRemote) {
+            try {
+                syncSessionDocument(session, selectedId)
+            } catch (e: Exception) {
+                logger.warn(
+                    "session_remote_backfill_failed",
+                    mapOf(
+                        "sessionId" to session.id,
+                        "selectedSessionId" to selectedId,
+                    ),
+                    e,
+                )
+            }
+        }
+        remoteSessions
+            .filter { it.id !in localIds }
+            .sortedBy { it.name.lowercase(Locale.getDefault()) }
+    }
+
+    suspend fun syncSessionRemote(session: Session) {
+        val selectedId = synchronized(lock) { selectedSessionId }
+        syncSessionRemoteInternal(session, selectedId)
     }
 
     private fun persistLocked() {
@@ -244,7 +286,7 @@ class SessionRepository(
     private fun syncSessionAsync(session: Session, selectedId: String?) {
         remoteScope.launch {
             try {
-                syncSessionDocument(session, selectedId)
+                syncSessionRemoteInternal(session, selectedId)
             } catch (e: Exception) {
                 logger.warn(
                     "session_remote_upsert_failed",
@@ -284,6 +326,12 @@ class SessionRepository(
                     e,
                 )
             }
+        }
+    }
+
+    private suspend fun syncSessionRemoteInternal(session: Session, selectedId: String?) {
+        withContext(remoteDispatcher) {
+            syncSessionDocument(session, selectedId)
         }
     }
 
@@ -354,6 +402,53 @@ class SessionRepository(
                 e,
             )
         }
+    }
+
+    private fun parseRemoteSession(document: DocumentSnapshot): Session? {
+        val name = document.getString("name")
+        if (name.isNullOrBlank()) {
+            logger.warn(
+                "session_remote_missing_name",
+                mapOf("documentId" to document.id),
+                null,
+            )
+            return null
+        }
+        return try {
+            val settingsData = document.get("settings") as? Map<*, *>
+            val settings = parseRemoteSettings(settingsData)
+            Session(document.id, name, settings)
+        } catch (e: Exception) {
+            logger.warn(
+                "session_remote_parse_failed",
+                mapOf("documentId" to document.id),
+                e,
+            )
+            null
+        }
+    }
+
+    private fun parseRemoteSettings(data: Map<*, *>?): SessionSettings {
+        if (data == null) {
+            return SessionSettings()
+        }
+        return SessionSettings(
+            processTodos = parseBoolean(data["processTodos"] ?: data["saveTodos"], true),
+            processAppointments = parseBoolean(data["processAppointments"] ?: data["saveAppointments"], true),
+            processThoughts = parseBoolean(data["processThoughts"] ?: data["saveThoughts"], true),
+            model = data["model"]?.toString()?.trim().orEmpty(),
+        )
+    }
+
+    private fun parseBoolean(value: Any?, default: Boolean): Boolean = when (value) {
+        is Boolean -> value
+        is Number -> value.toInt() != 0
+        is String -> when {
+            value.equals("true", ignoreCase = true) -> true
+            value.equals("false", ignoreCase = true) -> false
+            else -> default
+        }
+        else -> default
     }
 
     private fun sessionDocument(sessionId: String) = firestore
