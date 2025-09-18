@@ -69,14 +69,14 @@ import li.crescio.penates.diana.session.SessionSettings
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val sessionRepository = SessionRepository(filesDir)
+        val firestore = FirebaseFirestore.getInstance()
+        val sessionRepository = SessionRepository(filesDir, firestore)
         LlmResources.initialize(File(filesDir, "llm_resources"))
         val sessionInitialization = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener {
-                val firestore = FirebaseFirestore.getInstance()
                 lifecycleScope.launch {
                     try {
                         LlmResources.refreshFromFirestore(firestore)
