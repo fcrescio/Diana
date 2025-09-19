@@ -42,3 +42,37 @@ this structure by nesting documents under `sessions/{id}/notes`, ensuring that
 cloud synchronization respects the same boundaries. The Compose UI uses the
 session repository to route user actions and surface the correct data for the
 currently selected session.
+
+## Remote session documents
+
+`SessionRepository` mirrors the session list into a top-level Firestore
+collection named `sessions`. Each document lives at `sessions/{id}` and stores
+the user-facing name, a `settings` map (containing the three processing toggles
+and the selected LLM model), the ID of the currently selected session, and a
+boolean `selected` flag so other clients can react to selection changes.
+Documents are updated with a single `set()` call to keep the schema compact and
+atomic. 【F:app/src/main/java/li/crescio/penates/diana/session/SessionRepository.kt†L330-L357】
+
+## Importing remote sessions
+
+The repository can hydrate a session that already exists in Firestore by
+calling `importRemoteSession`. The method merges the incoming session into the
+local list, persists it to disk, and then enqueues a remote sync so the local
+copy stays authoritative if the user edits it. 【F:app/src/main/java/li/crescio/penates/diana/session/SessionRepository.kt†L48-L71】
+`MainActivity` wires this into the UI by refreshing the visible session list and
+switching the active environment to the imported session, which triggers the
+per-session repositories and Compose state to reinitialize with the new ID.
+【F:app/src/main/java/li/crescio/penates/diana/MainActivity.kt†L211-L247】【F:app/src/main/java/li/crescio/penates/diana/MainActivity.kt†L559-L585】
+
+## Offline behavior
+
+Sessions are persisted to `sessions.json` inside the app's files directory so
+the entire list and the last selection survive process restarts and offline
+launches. `SessionRepository` loads this file on initialization, keeps the model
+in memory, and rewrites it atomically whenever the list or selection changes.
+【F:app/src/main/java/li/crescio/penates/diana/session/SessionRepository.kt†L23-L124】【F:app/src/main/java/li/crescio/penates/diana/session/SessionRepository.kt†L178-L226】
+Remote synchronization happens opportunistically on a background coroutine: any
+create, update, import, or selection change queues a Firestore update, and the
+repository will also backfill remote documents the next time it sees the
+network via `fetchRemoteSessions`. This allows the UI to behave normally when
+offline while catching up once connectivity returns. 【F:app/src/main/java/li/crescio/penates/diana/session/SessionRepository.kt†L125-L168】【F:app/src/main/java/li/crescio/penates/diana/session/SessionRepository.kt†L264-L318】
