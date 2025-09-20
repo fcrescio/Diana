@@ -17,6 +17,28 @@ class MemoRepository(private val file: File) {
         return file.readLines().mapNotNull { parse(it) }
     }
 
+    suspend fun deleteMemo(memo: Memo) {
+        if (!file.exists()) return
+
+        val remaining = mutableListOf<String>()
+        var removed = false
+
+        file.readLines().forEach { line ->
+            val parsed = parse(line)
+            if (!removed && parsed != null && parsed.text == memo.text && parsed.audioPath == memo.audioPath) {
+                removed = true
+            } else {
+                remaining += line
+            }
+        }
+
+        if (remaining.isEmpty()) {
+            file.writeText("")
+        } else {
+            file.writeText(remaining.joinToString(separator = "\n", postfix = "\n"))
+        }
+    }
+
     private fun toJson(memo: Memo): String {
         val obj = JSONObject()
         obj.put("text", memo.text)

@@ -1,17 +1,34 @@
 package li.crescio.penates.diana.session
 
+import android.util.Log
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 import java.util.UUID
 import kotlin.text.Charsets
 
-class SessionRepository(private val filesDir: File) {
+class SessionRepository(
+    private val filesDir: File,
+    private val firestore: FirebaseFirestore,
+    private val remoteDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
     private val lock = Any()
     private val sessionFile = File(filesDir, "sessions.json")
     private val sessions = mutableListOf<Session>()
     private var selectedSessionId: String? = null
+    private val remoteScope = CoroutineScope(SupervisorJob() + remoteDispatcher)
+    private val logger = StructuredLogger()
 
     init {
         val state = loadFromDisk()
@@ -23,30 +40,66 @@ class SessionRepository(private val filesDir: File) {
         sessions.toList()
     }
 
-    fun create(name: String, settings: SessionSettings): Session = synchronized(lock) {
-        val session = Session(UUID.randomUUID().toString(), name, settings)
-        sessions.add(session)
-        persistLocked()
-        session
-    }
-
-    fun update(session: Session): Session = synchronized(lock) {
-        val index = sessions.indexOfFirst { it.id == session.id }
-        require(index >= 0) { "Session not found: ${session.id}" }
-        sessions[index] = session
-        persistLocked()
-        session
-    }
-
-    fun delete(id: String): Boolean = synchronized(lock) {
-        val removed = sessions.removeAll { it.id == id }
-        if (removed && selectedSessionId == id) {
-            selectedSessionId = null
-        }
-        if (removed) {
+    fun create(name: String, settings: SessionSettings): Session {
+        val (session, selectedId) = synchronized(lock) {
+            val session = Session(UUID.randomUUID().toString(), name, settings)
+            sessions.add(session)
             persistLocked()
+            session to selectedSessionId
         }
-        removed
+        syncSessionAsync(session, selectedId)
+        return session
+    }
+
+    fun importRemoteSession(session: Session): Session {
+        val (persisted, selectedId) = synchronized(lock) {
+            val index = sessions.indexOfFirst { it.id == session.id }
+            if (index >= 0) {
+                sessions[index] = session
+            } else {
+                sessions.add(session)
+            }
+            persistLocked()
+            session to selectedSessionId
+        }
+        syncSessionAsync(persisted, selectedId)
+        return persisted
+    }
+
+    fun update(session: Session): Session {
+        val (persisted, selectedId) = synchronized(lock) {
+            val index = sessions.indexOfFirst { it.id == session.id }
+            require(index >= 0) { "Session not found: ${session.id}" }
+            sessions[index] = session
+            persistLocked()
+            session to selectedSessionId
+        }
+        syncSessionAsync(persisted, selectedId)
+        return persisted
+    }
+
+    fun delete(id: String): Boolean {
+        val (removedSession, selectedIdAfter, remainingSessions) = synchronized(lock) {
+            val index = sessions.indexOfFirst { it.id == id }
+            if (index < 0) {
+                Triple<Session?, String?, List<Session>>(null, null, emptyList())
+            } else {
+                val removed = sessions.removeAt(index)
+                if (selectedSessionId == id) {
+                    selectedSessionId = null
+                }
+                persistLocked()
+                Triple(removed, selectedSessionId, sessions.toList())
+            }
+        }
+        if (removedSession != null) {
+            remoteScope.launch {
+                deleteSessionRemote(removedSession.id)
+                syncSelectionRemote(selectedIdAfter, remainingSessions, previousSelectedId = removedSession.id)
+            }
+            return true
+        }
+        return false
     }
 
     fun getSelected(): Session? = synchronized(lock) {
@@ -58,15 +111,61 @@ class SessionRepository(private val filesDir: File) {
         }
     }
 
-    fun setSelected(id: String?) = synchronized(lock) {
-        if (id == selectedSessionId) {
-            return
+    fun setSelected(id: String?) {
+        val (newSelectedId, previousSelectedId, snapshot) = synchronized(lock) {
+            if (id == selectedSessionId) {
+                return
+            }
+            if (id != null && sessions.none { it.id == id }) {
+                throw IllegalArgumentException("Session not found: $id")
+            }
+            val previous = selectedSessionId
+            selectedSessionId = id
+            persistLocked()
+            Triple(selectedSessionId, previous, sessions.toList())
         }
-        if (id != null && sessions.none { it.id == id }) {
-            throw IllegalArgumentException("Session not found: $id")
+        remoteScope.launch {
+            syncSelectionRemote(newSelectedId, snapshot, previousSelectedId)
         }
-        selectedSessionId = id
-        persistLocked()
+    }
+
+    suspend fun fetchRemoteSessions(): List<Session> = withContext(remoteDispatcher) {
+        val (localSessions, selectedId) = synchronized(lock) {
+            sessions.toList() to selectedSessionId
+        }
+        val snapshot = firestore.collection("sessions").get().await()
+        val remoteSessions = mutableListOf<Session>()
+        for (document in snapshot.documents) {
+            val session = parseRemoteSession(document)
+            if (session != null) {
+                remoteSessions += session
+            }
+        }
+        val remoteIds = remoteSessions.map { it.id }.toSet()
+        val localIds = localSessions.map { it.id }.toSet()
+        val missingRemote = localSessions.filter { it.id !in remoteIds }
+        for (session in missingRemote) {
+            try {
+                syncSessionDocument(session, selectedId)
+            } catch (e: Exception) {
+                logger.warn(
+                    "session_remote_backfill_failed",
+                    mapOf(
+                        "sessionId" to session.id,
+                        "selectedSessionId" to selectedId,
+                    ),
+                    e,
+                )
+            }
+        }
+        remoteSessions
+            .filter { it.id !in localIds }
+            .sortedBy { it.name.lowercase(Locale.getDefault()) }
+    }
+
+    suspend fun syncSessionRemote(session: Session) {
+        val selectedId = synchronized(lock) { selectedSessionId }
+        syncSessionRemoteInternal(session, selectedId)
     }
 
     private fun persistLocked() {
@@ -183,4 +282,248 @@ class SessionRepository(private val filesDir: File) {
         val sessions: List<Session>,
         val selectedSessionId: String?,
     )
+
+    private fun syncSessionAsync(session: Session, selectedId: String?) {
+        remoteScope.launch {
+            try {
+                syncSessionRemoteInternal(session, selectedId)
+            } catch (e: Exception) {
+                logger.warn(
+                    "session_remote_upsert_failed",
+                    mapOf(
+                        "sessionId" to session.id,
+                        "selectedSessionId" to selectedId,
+                    ),
+                    e,
+                )
+            }
+        }
+    }
+
+    private suspend fun syncSelectionRemote(
+        selectedId: String?,
+        sessionsSnapshot: List<Session>,
+        previousSelectedId: String?,
+    ) {
+        val targets = if (selectedId == null) {
+            sessionsSnapshot
+        } else {
+            sessionsSnapshot.filter { session ->
+                session.id == selectedId || session.id == previousSelectedId
+            }
+        }
+        for (session in targets) {
+            try {
+                syncSessionDocument(session, selectedId)
+            } catch (e: Exception) {
+                logger.warn(
+                    "session_selection_sync_failed",
+                    mapOf(
+                        "sessionId" to session.id,
+                        "selectedSessionId" to selectedId,
+                        "previousSelectedId" to previousSelectedId,
+                    ),
+                    e,
+                )
+            }
+        }
+    }
+
+    private suspend fun syncSessionRemoteInternal(session: Session, selectedId: String?) {
+        withContext(remoteDispatcher) {
+            syncSessionDocument(session, selectedId)
+        }
+    }
+
+    private suspend fun syncSessionDocument(session: Session, selectedId: String?) {
+        val data = mutableMapOf<String, Any?>(
+            "name" to session.name,
+            "settings" to session.settings.toMap(),
+            "selectedSessionId" to selectedId,
+            "selected" to (selectedId == session.id),
+        )
+        sessionDocument(session.id).set(data).await()
+        logger.info(
+            "session_remote_upserted",
+            mapOf(
+                "sessionId" to session.id,
+                "selectedSessionId" to selectedId,
+                "selected" to (selectedId == session.id),
+            ),
+        )
+    }
+
+    private suspend fun deleteSessionRemote(sessionId: String) {
+        val document = sessionDocument(sessionId)
+        try {
+            val notesSnapshot = document.collection("notes").get().await()
+            var deletedNotes = 0
+            for (note in notesSnapshot.documents) {
+                try {
+                    note.reference.delete().await()
+                    deletedNotes += 1
+                } catch (noteError: Exception) {
+                    logger.warn(
+                        "session_note_delete_failed",
+                        mapOf(
+                            "sessionId" to sessionId,
+                            "noteId" to note.id,
+                        ),
+                        noteError,
+                    )
+                }
+            }
+            if (deletedNotes > 0) {
+                logger.info(
+                    "session_notes_deleted",
+                    mapOf(
+                        "sessionId" to sessionId,
+                        "count" to deletedNotes,
+                    ),
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn(
+                "session_notes_query_failed",
+                mapOf("sessionId" to sessionId),
+                e,
+            )
+        }
+        try {
+            document.delete().await()
+            logger.info(
+                "session_remote_deleted",
+                mapOf("sessionId" to sessionId),
+            )
+        } catch (e: Exception) {
+            logger.warn(
+                "session_remote_delete_failed",
+                mapOf("sessionId" to sessionId),
+                e,
+            )
+        }
+    }
+
+    private fun parseRemoteSession(document: DocumentSnapshot): Session? {
+        val name = document.getString("name")
+        if (name.isNullOrBlank()) {
+            logger.warn(
+                "session_remote_missing_name",
+                mapOf("documentId" to document.id),
+                null,
+            )
+            return null
+        }
+        return try {
+            val settingsData = document.get("settings") as? Map<*, *>
+            val settings = parseRemoteSettings(settingsData)
+            Session(document.id, name, settings)
+        } catch (e: Exception) {
+            logger.warn(
+                "session_remote_parse_failed",
+                mapOf("documentId" to document.id),
+                e,
+            )
+            null
+        }
+    }
+
+    private fun parseRemoteSettings(data: Map<*, *>?): SessionSettings {
+        if (data == null) {
+            return SessionSettings()
+        }
+        return SessionSettings(
+            processTodos = parseBoolean(data["processTodos"] ?: data["saveTodos"], true),
+            processAppointments = parseBoolean(data["processAppointments"] ?: data["saveAppointments"], true),
+            processThoughts = parseBoolean(data["processThoughts"] ?: data["saveThoughts"], true),
+            model = data["model"]?.toString()?.trim().orEmpty(),
+        )
+    }
+
+    private fun parseBoolean(value: Any?, default: Boolean): Boolean = when (value) {
+        is Boolean -> value
+        is Number -> value.toInt() != 0
+        is String -> when {
+            value.equals("true", ignoreCase = true) -> true
+            value.equals("false", ignoreCase = true) -> false
+            else -> default
+        }
+        else -> default
+    }
+
+    private fun sessionDocument(sessionId: String) = firestore
+        .collection("sessions")
+        .document(sessionId)
+
+    private fun SessionSettings.toMap(): Map<String, Any> = mapOf(
+        "processTodos" to processTodos,
+        "processAppointments" to processAppointments,
+        "processThoughts" to processThoughts,
+        "model" to model,
+    )
+
+    private class StructuredLogger(private val tag: String = "SessionRepository") {
+        fun info(event: String, data: Map<String, Any?> = emptyMap()) {
+            log(Log.INFO, event, data, null)
+        }
+
+        fun warn(event: String, data: Map<String, Any?> = emptyMap(), throwable: Throwable?) {
+            log(Log.WARN, event, data, throwable)
+        }
+
+        private fun log(priority: Int, event: String, data: Map<String, Any?>, throwable: Throwable?) {
+            val payload = buildString {
+                append(event)
+                if (data.isNotEmpty()) {
+                    append(' ')
+                    append(formatData(data))
+                }
+            }
+            try {
+                when (priority) {
+                    Log.INFO -> Log.i(tag, payload)
+                    Log.WARN -> Log.w(tag, payload, throwable)
+                    Log.ERROR -> Log.e(tag, payload, throwable)
+                    else -> Log.d(tag, payload, throwable)
+                }
+            } catch (_: Throwable) {
+                val fallback = StringBuilder()
+                fallback.append(tag)
+                fallback.append(':')
+                fallback.append(payload)
+                throwable?.let {
+                    fallback.append('\n')
+                    fallback.append(it.stackTraceToString())
+                }
+                println(fallback.toString())
+            }
+        }
+
+        private fun formatData(data: Map<String, Any?>): String {
+            val json = JSONObject()
+            data.toSortedMap().forEach { (key, value) ->
+                json.put(key, wrapValue(value))
+            }
+            return json.toString()
+        }
+
+        private fun wrapValue(value: Any?): Any? = when (value) {
+            null -> JSONObject.NULL
+            is Map<*, *> -> {
+                val nested = JSONObject()
+                value.forEach { (k, v) ->
+                    if (k != null) {
+                        nested.put(k.toString(), wrapValue(v))
+                    }
+                }
+                nested
+            }
+            is Iterable<*> -> {
+                val array = JSONArray()
+                value.forEach { array.put(wrapValue(it)) }
+                array
+            }
+            else -> value
+        }
+    }
 }
