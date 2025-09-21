@@ -1,0 +1,5 @@
+[
+  { "id": "mistralai/mistral-nemo", "label": "model_mistral_nemo" },
+  { "id": "qwen/qwen3-30b-a3b", "label": "model_qwen_a3b" },
+  { "id": "openai/gpt-oss-120b", "label": "model_gpt_oss_120b" }
+]

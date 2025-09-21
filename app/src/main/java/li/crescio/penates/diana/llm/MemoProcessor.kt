@@ -42,13 +42,6 @@ class MemoProcessor(
 
     companion object {
         const val DEFAULT_MODEL = "mistralai/mistral-nemo"
-
-        val AVAILABLE_MODELS = listOf(
-            DEFAULT_MODEL,
-            "openrouter/sonoma-sky-alpha",
-            "qwen/qwen3-30b-a3b",
-            "openai/gpt-oss-120b",
-        )
     }
 
     private var todo: String = ""
@@ -65,8 +58,17 @@ class MemoProcessor(
             field = normalizeModel(value)
         }
 
-    private fun normalizeModel(value: String): String =
-        if (AVAILABLE_MODELS.contains(value)) value else DEFAULT_MODEL
+    private fun normalizeModel(value: String): String {
+        val available = LlmModelCatalog.availableModelIds()
+        if (available.isEmpty()) {
+            return DEFAULT_MODEL
+        }
+        return when {
+            available.contains(value) -> value
+            available.contains(DEFAULT_MODEL) -> DEFAULT_MODEL
+            else -> available.first()
+        }
+    }
 
     private val requestTemplate = loadResource("llm/request.json")
 
