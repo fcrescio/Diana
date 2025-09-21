@@ -17,6 +17,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -419,6 +420,7 @@ fun DianaApp(
     val processingText = stringResource(R.string.processing)
     val logLlmFailed = stringResource(R.string.log_llm_failed)
     val retryLabel = stringResource(R.string.retry)
+    val cancelLabel = stringResource(R.string.cancel)
     val logApiKeyMissing = stringResource(R.string.api_key_missing)
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -550,7 +552,8 @@ fun DianaApp(
                 addLog("LLM error: ${e.message ?: e}")
                 val result = snackbarHostState.showSnackbar(
                     message = logLlmFailed,
-                    actionLabel = retryLabel
+                    actionLabel = retryLabel,
+                    withDismissAction = true
                 )
                 if (result == SnackbarResult.ActionPerformed) {
                     processMemo(memo)
@@ -583,7 +586,30 @@ fun DianaApp(
                 },
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    action = {
+                        data.visuals.actionLabel?.let { label ->
+                            TextButton(onClick = { data.performAction() }) {
+                                Text(label)
+                            }
+                        }
+                    },
+                    dismissAction = if (data.visuals.withDismissAction) {
+                        {
+                            TextButton(onClick = { data.dismiss() }) {
+                                Text(cancelLabel)
+                            }
+                        }
+                    } else {
+                        null
+                    }
+                ) {
+                    Text(data.visuals.message)
+                }
+            }
+        },
         bottomBar = {
             if (screen == Screen.List) {
                 NavigationBar {
