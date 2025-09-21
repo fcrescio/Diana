@@ -188,24 +188,34 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        val deleteSession: (Session) -> Unit = { session ->
+                        fun handleDeleteSession(
+                            session: Session,
+                            deleteAction: (String) -> Boolean,
+                        ) {
                             val wasSelected = environment.session.id == session.id
-                            if (sessionRepository.delete(session.id)) {
+                            if (deleteAction(session.id)) {
                                 refreshSessions()
                                 val currentSelected = sessionRepository.getSelected()
-                                if (currentSelected != null) {
-                                    if (wasSelected) {
-                                        switchSession(currentSelected)
+                                when {
+                                    currentSelected != null && wasSelected -> switchSession(currentSelected)
+                                    currentSelected != null -> Unit
+                                    sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
+                                    else -> {
+                                        val name = context.generateSessionName(sessionsState.map { it.name })
+                                        val created = sessionRepository.create(name, SessionSettings())
+                                        refreshSessions()
+                                        switchSession(created)
                                     }
-                                } else if (sessionsState.isNotEmpty()) {
-                                    switchSession(sessionsState.first())
-                                } else {
-                                    val name = context.generateSessionName(sessionsState.map { it.name })
-                                    val created = sessionRepository.create(name, SessionSettings())
-                                    refreshSessions()
-                                    switchSession(created)
                                 }
                             }
+                        }
+
+                        val deleteSessionLocal: (Session) -> Unit = { session ->
+                            handleDeleteSession(session) { id -> sessionRepository.deleteLocal(id) }
+                        }
+
+                        val deleteSessionRemote: (Session) -> Unit = { session ->
+                            handleDeleteSession(session) { id -> sessionRepository.deleteLocalAndRemote(id) }
                         }
 
                         val importRemoteSession: (Session) -> Unit = { remoteSession ->
@@ -243,7 +253,8 @@ class MainActivity : ComponentActivity() {
                                 onSwitchSession = switchSession,
                                 onAddSession = addSession,
                                 onRenameSession = renameSession,
-                                onDeleteSession = deleteSession,
+                                onDeleteSessionLocal = deleteSessionLocal,
+                                onDeleteSessionRemote = deleteSessionRemote,
                                 onImportRemoteSession = importRemoteSession,
                                 onRefreshImportableSessions = { refreshRemoteSessionsList() },
                             )
@@ -381,7 +392,8 @@ fun DianaApp(
     onSwitchSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
-    onDeleteSession: (Session) -> Unit,
+    onDeleteSessionLocal: (Session) -> Unit,
+    onDeleteSessionRemote: (Session) -> Unit,
     onImportRemoteSession: (Session) -> Unit,
     onRefreshImportableSessions: () -> Unit,
 ) {
@@ -563,7 +575,8 @@ fun DianaApp(
                 onSelectSession = onSwitchSession,
                 onAddSession = onAddSession,
                 onRenameSession = onRenameSession,
-                onDeleteSession = onDeleteSession,
+                onDeleteSessionLocal = onDeleteSessionLocal,
+                onDeleteSessionRemote = onDeleteSessionRemote,
                 onShowImportSessions = {
                     onRefreshImportableSessions()
                     showImportDialog = true
@@ -768,7 +781,8 @@ private fun SessionTabBar(
     onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
-    onDeleteSession: (Session) -> Unit,
+    onDeleteSessionLocal: (Session) -> Unit,
+    onDeleteSessionRemote: (Session) -> Unit,
     onShowImportSessions: () -> Unit,
 ) {
     val addLabel = stringResource(R.string.add_session)
@@ -805,7 +819,8 @@ private fun SessionTabBar(
                         selected = index == selectedIndex,
                         onSelect = { onSelectSession(session) },
                         onRename = { newName -> onRenameSession(session, newName) },
-                        onDelete = { onDeleteSession(session) }
+                        onDeleteLocal = { onDeleteSessionLocal(session) },
+                        onDeleteRemote = { onDeleteSessionRemote(session) },
                     )
                 }
             }
@@ -834,7 +849,8 @@ private fun SessionTab(
     selected: Boolean,
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
-    onDelete: () -> Unit,
+    onDeleteLocal: () -> Unit,
+    onDeleteRemote: () -> Unit,
 ) {
     val renameLabel = stringResource(R.string.rename_session)
     val deleteLabel = stringResource(R.string.delete_session)
@@ -921,16 +937,29 @@ private fun SessionTab(
         )
     }
     if (showDeleteDialog) {
+        val deleteLocalLabel = stringResource(R.string.delete_session_local_action)
+        val deleteRemoteLabel = stringResource(R.string.delete_session_remote_action)
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text(stringResource(R.string.delete_session_title)) },
             text = { Text(stringResource(R.string.delete_session_message, session.name)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    onDelete()
-                }) {
-                    Text(stringResource(R.string.delete))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    TextButton(onClick = {
+                        showDeleteDialog = false
+                        onDeleteLocal()
+                    }) {
+                        Text(deleteLocalLabel)
+                    }
+                    TextButton(onClick = {
+                        showDeleteDialog = false
+                        onDeleteRemote()
+                    }) {
+                        Text(deleteRemoteLabel)
+                    }
                 }
             },
             dismissButton = {
