@@ -78,29 +78,25 @@ class SessionRepository(
         return persisted
     }
 
-    fun delete(id: String): Boolean {
-        val (removedSession, selectedIdAfter, remainingSessions) = synchronized(lock) {
-            val index = sessions.indexOfFirst { it.id == id }
-            if (index < 0) {
-                Triple<Session?, String?, List<Session>>(null, null, emptyList())
-            } else {
-                val removed = sessions.removeAt(index)
-                if (selectedSessionId == id) {
-                    selectedSessionId = null
-                }
-                persistLocked()
-                Triple(removed, selectedSessionId, sessions.toList())
-            }
-        }
-        if (removedSession != null) {
-            remoteScope.launch {
-                deleteSessionRemote(removedSession.id)
-                syncSelectionRemote(selectedIdAfter, remainingSessions, previousSelectedId = removedSession.id)
-            }
-            return true
-        }
-        return false
+    fun deleteLocal(id: String): Boolean {
+        return removeSession(id) != null
     }
+
+    fun deleteLocalAndRemote(id: String): Boolean {
+        val result = removeSession(id) ?: return false
+        remoteScope.launch {
+            deleteSessionRemote(result.removedSession.id)
+            syncSelectionRemote(
+                result.selectedIdAfter,
+                result.remainingSessions,
+                previousSelectedId = result.removedSession.id,
+            )
+        }
+        return true
+    }
+
+    @Deprecated("Use deleteLocal or deleteLocalAndRemote")
+    fun delete(id: String): Boolean = deleteLocalAndRemote(id)
 
     fun getSelected(): Session? = synchronized(lock) {
         val selectedId = selectedSessionId
@@ -282,6 +278,28 @@ class SessionRepository(
         val sessions: List<Session>,
         val selectedSessionId: String?,
     )
+
+    private data class DeleteResult(
+        val removedSession: Session,
+        val selectedIdAfter: String?,
+        val remainingSessions: List<Session>,
+    )
+
+    private fun removeSession(id: String): DeleteResult? {
+        return synchronized(lock) {
+            val index = sessions.indexOfFirst { it.id == id }
+            if (index < 0) {
+                null
+            } else {
+                val removed = sessions.removeAt(index)
+                if (selectedSessionId == id) {
+                    selectedSessionId = null
+                }
+                persistLocked()
+                DeleteResult(removed, selectedSessionId, sessions.toList())
+            }
+        }
+    }
 
     private fun syncSessionAsync(session: Session, selectedId: String?) {
         remoteScope.launch {

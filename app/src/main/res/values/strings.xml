@@ -51,7 +51,9 @@
     <string name="delete_session">Delete session</string>
     <string name="session_name">Session name</string>
     <string name="delete_session_title">Delete session</string>
-    <string name="delete_session_message">Are you sure you want to delete %1$s?</string>
+    <string name="delete_session_message">How would you like to delete %1$s?</string>
+    <string name="delete_session_local_action">Delete on this device</string>
+    <string name="delete_session_remote_action">Delete on this device and from Firebase</string>
     <string name="session_actions">Session options</string>
     <string name="no_sessions">No sessions</string>
     <string name="delete_memo_title">Delete memo</string>
