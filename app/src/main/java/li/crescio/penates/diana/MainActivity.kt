@@ -17,6 +17,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.LlmLogger
+import li.crescio.penates.diana.llm.LlmModelCatalog
 import li.crescio.penates.diana.llm.LlmResources
 import li.crescio.penates.diana.llm.MemoProcessor
 import li.crescio.penates.diana.llm.TodoItem
@@ -188,24 +191,34 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        val deleteSession: (Session) -> Unit = { session ->
+                        fun handleDeleteSession(
+                            session: Session,
+                            deleteAction: (String) -> Boolean,
+                        ) {
                             val wasSelected = environment.session.id == session.id
-                            if (sessionRepository.delete(session.id)) {
+                            if (deleteAction(session.id)) {
                                 refreshSessions()
                                 val currentSelected = sessionRepository.getSelected()
-                                if (currentSelected != null) {
-                                    if (wasSelected) {
-                                        switchSession(currentSelected)
+                                when {
+                                    currentSelected != null && wasSelected -> switchSession(currentSelected)
+                                    currentSelected != null -> Unit
+                                    sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
+                                    else -> {
+                                        val name = context.generateSessionName(sessionsState.map { it.name })
+                                        val created = sessionRepository.create(name, SessionSettings())
+                                        refreshSessions()
+                                        switchSession(created)
                                     }
-                                } else if (sessionsState.isNotEmpty()) {
-                                    switchSession(sessionsState.first())
-                                } else {
-                                    val name = context.generateSessionName(sessionsState.map { it.name })
-                                    val created = sessionRepository.create(name, SessionSettings())
-                                    refreshSessions()
-                                    switchSession(created)
                                 }
                             }
+                        }
+
+                        val deleteSessionLocal: (Session) -> Unit = { session ->
+                            handleDeleteSession(session) { id -> sessionRepository.deleteLocal(id) }
+                        }
+
+                        val deleteSessionRemote: (Session) -> Unit = { session ->
+                            handleDeleteSession(session) { id -> sessionRepository.deleteLocalAndRemote(id) }
                         }
 
                         val importRemoteSession: (Session) -> Unit = { remoteSession ->
@@ -243,7 +256,8 @@ class MainActivity : ComponentActivity() {
                                 onSwitchSession = switchSession,
                                 onAddSession = addSession,
                                 onRenameSession = renameSession,
-                                onDeleteSession = deleteSession,
+                                onDeleteSessionLocal = deleteSessionLocal,
+                                onDeleteSessionRemote = deleteSessionRemote,
                                 onImportRemoteSession = importRemoteSession,
                                 onRefreshImportableSessions = { refreshRemoteSessionsList() },
                             )
@@ -381,7 +395,8 @@ fun DianaApp(
     onSwitchSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
-    onDeleteSession: (Session) -> Unit,
+    onDeleteSessionLocal: (Session) -> Unit,
+    onDeleteSessionRemote: (Session) -> Unit,
     onImportRemoteSession: (Session) -> Unit,
     onRefreshImportableSessions: () -> Unit,
 ) {
@@ -407,14 +422,36 @@ fun DianaApp(
     val processingText = stringResource(R.string.processing)
     val logLlmFailed = stringResource(R.string.log_llm_failed)
     val retryLabel = stringResource(R.string.retry)
+    val cancelLabel = stringResource(R.string.cancel)
     val logApiKeyMissing = stringResource(R.string.api_key_missing)
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val modelOptions = remember(context) {
+        val resources = context.resources
+        val packageName = context.packageName
+        val options = LlmModelCatalog.availableModels().mapNotNull { definition ->
+            val resId = resources.getIdentifier(definition.labelResourceName, "string", packageName)
+            if (resId == 0) {
+                Log.w("MainActivity", "Missing string resource for model label ${definition.labelResourceName}")
+                null
+            } else {
+                LlmModelOption(definition.id, resId)
+            }
+        }
+        if (options.isEmpty()) {
+            listOf(LlmModelOption(MemoProcessor.DEFAULT_MODEL, R.string.model_mistral_nemo))
+        } else {
+            options
+        }
+    }
+    val availableModelIds = remember(modelOptions) { modelOptions.map { it.id } }
 
     fun sanitizeModel(model: String): String {
-        return if (model in MemoProcessor.AVAILABLE_MODELS) {
-            model
-        } else {
-            MemoProcessor.DEFAULT_MODEL
+        return when {
+            availableModelIds.isEmpty() -> MemoProcessor.DEFAULT_MODEL
+            availableModelIds.contains(model) -> model
+            availableModelIds.contains(MemoProcessor.DEFAULT_MODEL) -> MemoProcessor.DEFAULT_MODEL
+            else -> availableModelIds.first()
         }
     }
 
@@ -434,15 +471,6 @@ fun DianaApp(
             initialModel = sanitizedModel
         )
     }
-    val modelOptions = remember {
-        listOf(
-            LlmModelOption(MemoProcessor.DEFAULT_MODEL, R.string.model_mistral_nemo),
-            LlmModelOption("openrouter/sonoma-sky-alpha", R.string.model_sonoma_sky_alpha),
-            LlmModelOption("qwen/qwen3-30b-a3b", R.string.model_qwen_a3b),
-            LlmModelOption("openai/gpt-oss-120b", R.string.model_gpt_oss_120b),
-        )
-    }
-
     LaunchedEffect(session) {
         val sanitized = sanitizeModel(session.settings.model)
         val sanitizedSession = session.copy(settings = session.settings.copy(model = sanitized))
@@ -538,7 +566,8 @@ fun DianaApp(
                 addLog("LLM error: ${e.message ?: e}")
                 val result = snackbarHostState.showSnackbar(
                     message = logLlmFailed,
-                    actionLabel = retryLabel
+                    actionLabel = retryLabel,
+                    withDismissAction = true
                 )
                 if (result == SnackbarResult.ActionPerformed) {
                     processMemo(memo)
@@ -563,14 +592,38 @@ fun DianaApp(
                 onSelectSession = onSwitchSession,
                 onAddSession = onAddSession,
                 onRenameSession = onRenameSession,
-                onDeleteSession = onDeleteSession,
+                onDeleteSessionLocal = onDeleteSessionLocal,
+                onDeleteSessionRemote = onDeleteSessionRemote,
                 onShowImportSessions = {
                     onRefreshImportableSessions()
                     showImportDialog = true
                 },
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    action = {
+                        data.visuals.actionLabel?.let { label ->
+                            TextButton(onClick = { data.performAction() }) {
+                                Text(label)
+                            }
+                        }
+                    },
+                    dismissAction = if (data.visuals.withDismissAction) {
+                        {
+                            TextButton(onClick = { data.dismiss() }) {
+                                Text(cancelLabel)
+                            }
+                        }
+                    } else {
+                        null
+                    }
+                ) {
+                    Text(data.visuals.message)
+                }
+            }
+        },
         bottomBar = {
             if (screen == Screen.List) {
                 NavigationBar {
@@ -768,7 +821,8 @@ private fun SessionTabBar(
     onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
-    onDeleteSession: (Session) -> Unit,
+    onDeleteSessionLocal: (Session) -> Unit,
+    onDeleteSessionRemote: (Session) -> Unit,
     onShowImportSessions: () -> Unit,
 ) {
     val addLabel = stringResource(R.string.add_session)
@@ -805,7 +859,8 @@ private fun SessionTabBar(
                         selected = index == selectedIndex,
                         onSelect = { onSelectSession(session) },
                         onRename = { newName -> onRenameSession(session, newName) },
-                        onDelete = { onDeleteSession(session) }
+                        onDeleteLocal = { onDeleteSessionLocal(session) },
+                        onDeleteRemote = { onDeleteSessionRemote(session) },
                     )
                 }
             }
@@ -834,7 +889,8 @@ private fun SessionTab(
     selected: Boolean,
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
-    onDelete: () -> Unit,
+    onDeleteLocal: () -> Unit,
+    onDeleteRemote: () -> Unit,
 ) {
     val renameLabel = stringResource(R.string.rename_session)
     val deleteLabel = stringResource(R.string.delete_session)
@@ -921,16 +977,29 @@ private fun SessionTab(
         )
     }
     if (showDeleteDialog) {
+        val deleteLocalLabel = stringResource(R.string.delete_session_local_action)
+        val deleteRemoteLabel = stringResource(R.string.delete_session_remote_action)
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text(stringResource(R.string.delete_session_title)) },
             text = { Text(stringResource(R.string.delete_session_message, session.name)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    onDelete()
-                }) {
-                    Text(stringResource(R.string.delete))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    TextButton(onClick = {
+                        showDeleteDialog = false
+                        onDeleteLocal()
+                    }) {
+                        Text(deleteLocalLabel)
+                    }
+                    TextButton(onClick = {
+                        showDeleteDialog = false
+                        onDeleteRemote()
+                    }) {
+                        Text(deleteRemoteLabel)
+                    }
                 }
             },
             dismissButton = {

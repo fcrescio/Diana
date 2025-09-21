@@ -42,7 +42,6 @@
     <string name="llm_model">LLM model</string>
     <string name="editing_session">Editing context for %1$s</string>
     <string name="model_mistral_nemo">Mistral Nemo (default)</string>
-    <string name="model_sonoma_sky_alpha">Sonoma Sky Alpha</string>
     <string name="model_qwen_a3b">Qwen3 30B A3B</string>
     <string name="model_gpt_oss_120b">GPT-OSS 120B</string>
     <string name="add_session">Add session</string>
@@ -51,7 +50,9 @@
     <string name="delete_session">Delete session</string>
     <string name="session_name">Session name</string>
     <string name="delete_session_title">Delete session</string>
-    <string name="delete_session_message">Are you sure you want to delete %1$s?</string>
+    <string name="delete_session_message">How would you like to delete %1$s?</string>
+    <string name="delete_session_local_action">Delete on this device</string>
+    <string name="delete_session_remote_action">Delete on this device and from Firebase</string>
     <string name="session_actions">Session options</string>
     <string name="no_sessions">No sessions</string>
     <string name="delete_memo_title">Delete memo</string>
