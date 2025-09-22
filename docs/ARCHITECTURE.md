@@ -28,6 +28,23 @@ memos or stream partial transcripts) are also owned by `DianaApp`. The app
 persists these user choices alongside the session so that the interface and the
 processing pipeline stay aligned.
 
+### Thought document pipeline
+
+When the user enables thought processing, `MemoProcessor` asks the LLM for a
+full Markdown document plus a machine-readable outline. It stores the result as
+`ThoughtDocument`, exposing both the markdown body and nested sections to the
+rest of the app. 【F:app/src/main/java/li/crescio/penates/diana/llm/MemoProcessor.kt†L54-L120】【F:app/src/main/java/li/crescio/penates/diana/llm/MemoProcessor.kt†L361-L399】
+
+`NoteRepository` persists the markdown to disk alongside a JSON outline file and
+mirrors both artifacts to Firestore. Loading prefers local files but backfills
+from the remote copy so the Markdown viewer stays portable between devices.
+【F:app/src/main/java/li/crescio/penates/diana/persistence/NoteRepository.kt†L19-L119】【F:app/src/main/java/li/crescio/penates/diana/persistence/NoteRepository.kt†L236-L275】
+
+`NotesListScreen` turns the outline into nested chips and renders the selected
+section with Markwon. Users can filter sections by tag, and when no thought
+document exists the UI falls back to raw memo notes to keep the space useful.
+【F:app/src/main/java/li/crescio/penates/diana/ui/NotesListScreen.kt†L45-L215】【F:app/src/main/java/li/crescio/penates/diana/ui/NotesListScreen.kt†L265-L338】
+
 ## Session management and isolation
 
 Session management is coordinated by `SessionRepository`, which collaborates
