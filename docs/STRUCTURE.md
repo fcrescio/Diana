@@ -34,4 +34,5 @@ The main source set lives under `app/src/main/java/li/crescio/penates/diana`. Ke
 - [ARCHITECTURE.md](ARCHITECTURE.md) – System overview, major flows, and component responsibilities.
 - [NOTES.md](NOTES.md) – Ongoing design discussions, open questions, and decision history.
 - [DEPLOYMENT.md](DEPLOYMENT.md) – Build, packaging, and release guidance.
+- [WORKLOG.md](WORKLOG.md) – Snapshot of active initiatives with links to deeper plans.
 - [`docs/thoughts/`](thoughts/) – Exploratory planning documents and deeper design dives.

@@ -10,6 +10,7 @@
 - `docs/ARCHITECTURE.md` – High-level system structure, core flows, and major components.
 - `docs/NOTES.md` – Working notes that capture design discussions, caveats, and ongoing investigations.
 - `docs/DEPLOYMENT.md` – Instructions for packaging and deploying the application.
+- `docs/WORKLOG.md` – Current initiatives, status, and deep links into planning docs.
 - `docs/thoughts/` – Planning documents and deeper design explorations.
 
 ## Testing
