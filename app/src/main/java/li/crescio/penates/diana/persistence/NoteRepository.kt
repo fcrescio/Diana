@@ -449,19 +449,43 @@ class NoteRepository(
         summary: MemoSummary,
         saveTodos: Boolean,
         saveAppointments: Boolean,
-        saveThoughts: Boolean,
+        saveThoughts: Boolean
     ): List<StructuredNote> {
         val notes = mutableListOf<StructuredNote>()
         if (saveTodos) {
-            notes += summary.todoItems.map {
-                StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate, id = it.id)
+            summary.todoItems.forEach { item ->
+                notes.add(
+                    StructuredNote.ToDo(
+                        text = item.text,
+                        status = item.status,
+                        tags = item.tags,
+                        dueDate = item.dueDate,
+                        eventDate = item.eventDate,
+                        id = item.id
+                    )
+                )
             }
         }
         if (saveAppointments) {
-            notes += summary.appointmentItems.map { StructuredNote.Event(it.text, it.datetime, it.location) }
+            summary.appointmentItems.forEach { item ->
+                notes.add(
+                    StructuredNote.Event(
+                        text = item.text,
+                        datetime = item.datetime,
+                        location = item.location
+                    )
+                )
+            }
         }
         if (saveThoughts) {
-            notes += summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
+            summary.thoughtItems.forEach { item ->
+                notes.add(
+                    StructuredNote.Memo(
+                        text = item.text,
+                        tags = item.tags
+                    )
+                )
+            }
         }
         return notes
     }
