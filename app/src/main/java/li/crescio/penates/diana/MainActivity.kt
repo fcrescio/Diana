@@ -86,209 +86,16 @@ class MainActivity : ComponentActivity() {
         val sessionInitialization = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
-        fun launchApplication(canRefreshOverrides: Boolean, authException: Exception?) {
-            lifecycleScope.launch {
-                if (canRefreshOverrides) {
-                    Log.i("MainActivity", "LLM refresh: start (remote overrides enabled)")
-                    var refreshResult = "completed successfully"
-                    try {
-                        LlmResources.refreshFromFirestore(firestore)
-                    } catch (e: Exception) {
-                        refreshResult = "failed: ${e.message ?: "no message"}"
-                        Log.e("MainActivity", "Failed to update LLM resources", e)
-                    }
-                    Log.i("MainActivity", "LLM refresh: end ($refreshResult)")
-                } else {
-                    val authCode = (authException as? FirebaseAuthException)?.errorCode
-                    val message = authException?.message ?: "unknown error"
-                    val codeInfo = authCode?.let { "code=$it, " } ?: ""
-                    Log.w(
-                        "MainActivity",
-                        "LLM refresh: start (skipped due to auth failure: ${codeInfo}message=$message)",
-                    )
-                    Log.w(
-                        "MainActivity",
-                        "LLM refresh: end (skipped due to auth failure: ${codeInfo}message=$message)",
-                    )
-                }
-                if (sessionInitialization.createdDefaultSession) {
-                    migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
-                }
-                val initialEnvironment = createSessionEnvironment(sessionInitialization.session, firestore)
-                val initialImportSessions = try {
-                    sessionRepository.fetchRemoteSessions()
-                } catch (e: Exception) {
-                    Log.w("MainActivity", "Failed to fetch remote sessions", e)
-                    emptyList()
-                }
-                val testDoc = firestore.collection("test").document("init")
-                testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
-                    testDoc.get().addOnFailureListener { e ->
-                        if (e is FirebaseFirestoreException &&
-                            e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-                        ) {
-                            Log.e("MainActivity", permissionMessage, e)
-                            Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }.addOnFailureListener { e ->
-                    if (e is FirebaseFirestoreException &&
-                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-                    ) {
-                        Log.e("MainActivity", permissionMessage, e)
-                        Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
-                    }
-                }
-                setContent {
-                        var environment by remember { mutableStateOf(initialEnvironment) }
-                        val sessionsState = remember {
-                            mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
-                        }
-                        val importableSessions = remember {
-                            mutableStateListOf<Session>().apply { addAll(initialImportSessions) }
-                        }
-                        val coroutineScope = rememberCoroutineScope()
-                        val context = this@MainActivity
-
-                        fun refreshSessions() {
-                            sessionsState.clear()
-                            sessionsState.addAll(sessionRepository.list())
-                        }
-
-                        fun refreshRemoteSessionsList() {
-                            coroutineScope.launch {
-                                try {
-                                    val remoteSessions = sessionRepository.fetchRemoteSessions()
-                                    importableSessions.clear()
-                                    importableSessions.addAll(remoteSessions)
-                                } catch (e: Exception) {
-                                    Log.w("MainActivity", "Failed to refresh remote sessions", e)
-                                }
-                            }
-                        }
-
-                        val switchSession: (Session) -> Unit = { targetSession ->
-                            sessionRepository.setSelected(targetSession.id)
-                            val resolved = sessionRepository.getSelected() ?: targetSession
-                            environment = createSessionEnvironment(resolved, firestore)
-                        }
-
-                        val addSession: () -> Unit = {
-                            coroutineScope.launch {
-                                val name = context.generateSessionName(sessionsState.map { it.name })
-                                val created = sessionRepository.create(name, SessionSettings())
-                                refreshSessions()
-                                switchSession(created)
-                                try {
-                                    sessionRepository.syncSessionRemote(created)
-                                } catch (e: Exception) {
-                                    Log.w("MainActivity", "Failed to sync session ${created.id} to Firestore", e)
-                                }
-                            }
-                        }
-
-                        val renameSession: (Session, String) -> Unit = { session, newName ->
-                            coroutineScope.launch {
-                                val trimmed = newName.trim()
-                                if (trimmed.isEmpty() || trimmed == session.name) {
-                                    return@launch
-                                }
-                                val persisted = sessionRepository.update(session.copy(name = trimmed))
-                                refreshSessions()
-                                if (environment.session.id == persisted.id) {
-                                    environment = environment.copy(session = persisted)
-                                }
-                                try {
-                                    sessionRepository.syncSessionRemote(persisted)
-                                } catch (e: Exception) {
-                                    Log.w(
-                                        "MainActivity",
-                                        "Failed to sync session ${persisted.id} to Firestore",
-                                        e,
-                                    )
-                                }
-                            }
-                        }
-
-                        fun handleDeleteSession(
-                            session: Session,
-                            deleteAction: (String) -> Boolean,
-                        ) {
-                            val wasSelected = environment.session.id == session.id
-                            if (deleteAction(session.id)) {
-                                refreshSessions()
-                                val currentSelected = sessionRepository.getSelected()
-                                when {
-                                    currentSelected != null && wasSelected -> switchSession(currentSelected)
-                                    currentSelected != null -> Unit
-                                    sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
-                                    else -> {
-                                        val name = context.generateSessionName(sessionsState.map { it.name })
-                                        val created = sessionRepository.create(name, SessionSettings())
-                                        refreshSessions()
-                                        switchSession(created)
-                                    }
-                                }
-                            }
-                        }
-
-                        val deleteSessionLocal: (Session) -> Unit = { session ->
-                            handleDeleteSession(session) { id -> sessionRepository.deleteLocal(id) }
-                        }
-
-                        val deleteSessionRemote: (Session) -> Unit = { session ->
-                            handleDeleteSession(session) { id -> sessionRepository.deleteLocalAndRemote(id) }
-                        }
-
-                        val importRemoteSession: (Session) -> Unit = { remoteSession ->
-                            val imported = sessionRepository.importRemoteSession(remoteSession)
-                            refreshSessions()
-                            switchSession(imported)
-                            importableSessions.removeAll { it.id == imported.id }
-                            refreshRemoteSessionsList()
-                        }
-
-                        DianaTheme {
-                            DianaApp(
-                                session = environment.session,
-                                sessions = sessionsState,
-                                importableSessions = importableSessions,
-                                repository = environment.noteRepository,
-                                memoRepository = environment.memoRepository,
-                                onUpdateSession = { updatedSession ->
-                                    val persisted = sessionRepository.update(updatedSession)
-                                    environment = environment.copy(session = persisted)
-                                    refreshSessions()
-                                    coroutineScope.launch {
-                                        try {
-                                            sessionRepository.syncSessionRemote(persisted)
-                                        } catch (e: Exception) {
-                                            Log.w(
-                                                "MainActivity",
-                                                "Failed to sync session ${persisted.id} to Firestore",
-                                                e,
-                                            )
-                                        }
-                                    }
-                                    persisted
-                                },
-                                onSwitchSession = switchSession,
-                                onAddSession = addSession,
-                                onRenameSession = renameSession,
-                                onDeleteSessionLocal = deleteSessionLocal,
-                                onDeleteSessionRemote = deleteSessionRemote,
-                                onImportRemoteSession = importRemoteSession,
-                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener {
-                launchApplication(true, null)
+                launchApplication(
+                    canRefreshOverrides = true,
+                    authException = null,
+                    firestore = firestore,
+                    sessionRepository = sessionRepository,
+                    sessionInitialization = sessionInitialization,
+                    permissionMessage = permissionMessage,
+                )
             }
             .addOnFailureListener { exception ->
                 val authCode = (exception as? FirebaseAuthException)?.errorCode
@@ -303,8 +110,222 @@ class MainActivity : ComponentActivity() {
                     "Authentication failed; remote LLM overrides will be skipped.",
                     Toast.LENGTH_LONG,
                 ).show()
-                launchApplication(false, exception)
+                launchApplication(
+                    canRefreshOverrides = false,
+                    authException = exception,
+                    firestore = firestore,
+                    sessionRepository = sessionRepository,
+                    sessionInitialization = sessionInitialization,
+                    permissionMessage = permissionMessage,
+                )
             }
+    }
+
+    private fun launchApplication(
+        canRefreshOverrides: Boolean,
+        authException: Exception?,
+        firestore: FirebaseFirestore,
+        sessionRepository: SessionRepository,
+        sessionInitialization: SessionInitialization,
+        permissionMessage: String,
+    ) {
+        lifecycleScope.launch {
+            if (canRefreshOverrides) {
+                Log.i("MainActivity", "LLM refresh: start (remote overrides enabled)")
+                var refreshResult = "completed successfully"
+                try {
+                    LlmResources.refreshFromFirestore(firestore)
+                } catch (e: Exception) {
+                    refreshResult = "failed: ${e.message ?: "no message"}"
+                    Log.e("MainActivity", "Failed to update LLM resources", e)
+                }
+                Log.i("MainActivity", "LLM refresh: end ($refreshResult)")
+            } else {
+                val authCode = (authException as? FirebaseAuthException)?.errorCode
+                val message = authException?.message ?: "unknown error"
+                val codeInfo = authCode?.let { "code=$it, " } ?: ""
+                Log.w(
+                    "MainActivity",
+                    "LLM refresh: start (skipped due to auth failure: ${codeInfo}message=$message)",
+                )
+                Log.w(
+                    "MainActivity",
+                    "LLM refresh: end (skipped due to auth failure: ${codeInfo}message=$message)",
+                )
+            }
+            if (sessionInitialization.createdDefaultSession) {
+                migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
+            }
+            val initialEnvironment = createSessionEnvironment(sessionInitialization.session, firestore)
+            val initialImportSessions = try {
+                sessionRepository.fetchRemoteSessions()
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Failed to fetch remote sessions", e)
+                emptyList()
+            }
+            val testDoc = firestore.collection("test").document("init")
+            testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
+                testDoc.get().addOnFailureListener { e ->
+                    if (e is FirebaseFirestoreException &&
+                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    ) {
+                        Log.e("MainActivity", permissionMessage, e)
+                        Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }.addOnFailureListener { e ->
+                if (e is FirebaseFirestoreException &&
+                    e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    Log.e("MainActivity", permissionMessage, e)
+                    Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
+                }
+            }
+            setContent {
+                    var environment by remember { mutableStateOf(initialEnvironment) }
+                    val sessionsState = remember {
+                        mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
+                    }
+                    val importableSessions = remember {
+                        mutableStateListOf<Session>().apply { addAll(initialImportSessions) }
+                    }
+                    val coroutineScope = rememberCoroutineScope()
+                    val context = this@MainActivity
+
+                    fun refreshSessions() {
+                        sessionsState.clear()
+                        sessionsState.addAll(sessionRepository.list())
+                    }
+
+                    fun refreshRemoteSessionsList() {
+                        coroutineScope.launch {
+                            try {
+                                val remoteSessions = sessionRepository.fetchRemoteSessions()
+                                importableSessions.clear()
+                                importableSessions.addAll(remoteSessions)
+                            } catch (e: Exception) {
+                                Log.w("MainActivity", "Failed to refresh remote sessions", e)
+                            }
+                        }
+                    }
+
+                    val switchSession: (Session) -> Unit = { targetSession ->
+                        sessionRepository.setSelected(targetSession.id)
+                        val resolved = sessionRepository.getSelected() ?: targetSession
+                        environment = createSessionEnvironment(resolved, firestore)
+                    }
+
+                    val addSession: () -> Unit = {
+                        coroutineScope.launch {
+                            val name = context.generateSessionName(sessionsState.map { it.name })
+                            val created = sessionRepository.create(name, SessionSettings())
+                            refreshSessions()
+                            switchSession(created)
+                            try {
+                                sessionRepository.syncSessionRemote(created)
+                            } catch (e: Exception) {
+                                Log.w("MainActivity", "Failed to sync session ${created.id} to Firestore", e)
+                            }
+                        }
+                    }
+
+                    val renameSession: (Session, String) -> Unit = { session, newName ->
+                        coroutineScope.launch {
+                            val trimmed = newName.trim()
+                            if (trimmed.isEmpty() || trimmed == session.name) {
+                                return@launch
+                            }
+                            val persisted = sessionRepository.update(session.copy(name = trimmed))
+                            refreshSessions()
+                            if (environment.session.id == persisted.id) {
+                                environment = environment.copy(session = persisted)
+                            }
+                            try {
+                                sessionRepository.syncSessionRemote(persisted)
+                            } catch (e: Exception) {
+                                Log.w(
+                                    "MainActivity",
+                                    "Failed to sync session ${persisted.id} to Firestore",
+                                    e,
+                                )
+                            }
+                        }
+                    }
+
+                    fun handleDeleteSession(
+                        session: Session,
+                        deleteAction: (String) -> Boolean,
+                    ) {
+                        val wasSelected = environment.session.id == session.id
+                        if (deleteAction(session.id)) {
+                            refreshSessions()
+                            val currentSelected = sessionRepository.getSelected()
+                            when {
+                                currentSelected != null && wasSelected -> switchSession(currentSelected)
+                                currentSelected != null -> Unit
+                                sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
+                                else -> {
+                                    val name = context.generateSessionName(sessionsState.map { it.name })
+                                    val created = sessionRepository.create(name, SessionSettings())
+                                    refreshSessions()
+                                    switchSession(created)
+                                }
+                            }
+                        }
+                    }
+
+                    val deleteSessionLocal: (Session) -> Unit = { session ->
+                        handleDeleteSession(session) { id -> sessionRepository.deleteLocal(id) }
+                    }
+
+                    val deleteSessionRemote: (Session) -> Unit = { session ->
+                        handleDeleteSession(session) { id -> sessionRepository.deleteLocalAndRemote(id) }
+                    }
+
+                    val importRemoteSession: (Session) -> Unit = { remoteSession ->
+                        val imported = sessionRepository.importRemoteSession(remoteSession)
+                        refreshSessions()
+                        switchSession(imported)
+                        importableSessions.removeAll { it.id == imported.id }
+                        refreshRemoteSessionsList()
+                    }
+
+                    DianaTheme {
+                        DianaApp(
+                            session = environment.session,
+                            sessions = sessionsState,
+                            importableSessions = importableSessions,
+                            repository = environment.noteRepository,
+                            memoRepository = environment.memoRepository,
+                            onUpdateSession = { updatedSession ->
+                                val persisted = sessionRepository.update(updatedSession)
+                                environment = environment.copy(session = persisted)
+                                refreshSessions()
+                                coroutineScope.launch {
+                                    try {
+                                        sessionRepository.syncSessionRemote(persisted)
+                                    } catch (e: Exception) {
+                                        Log.w(
+                                            "MainActivity",
+                                            "Failed to sync session ${persisted.id} to Firestore",
+                                            e,
+                                        )
+                                    }
+                                }
+                                persisted
+                            },
+                            onSwitchSession = switchSession,
+                            onAddSession = addSession,
+                            onRenameSession = renameSession,
+                            onDeleteSessionLocal = deleteSessionLocal,
+                            onDeleteSessionRemote = deleteSessionRemote,
+                            onImportRemoteSession = importRemoteSession,
+                            onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun ensureInitialSession(sessionRepository: SessionRepository): SessionInitialization {
