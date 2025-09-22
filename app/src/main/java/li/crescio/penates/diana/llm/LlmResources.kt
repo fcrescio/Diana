@@ -54,23 +54,37 @@ object LlmResources {
      */
     suspend fun refreshFromFirestore(firestore: FirebaseFirestore) {
         val directory = storageDir ?: throw IllegalStateException("LlmResources not initialized")
+        Log.i(TAG, "Starting LLM resource refresh into ${directory.absolutePath}")
         val snapshot = firestore.collection("resources").get().await()
+        Log.i(TAG, "Fetched ${snapshot.size()} resource documents from Firestore collection 'resources'")
         if (snapshot.isEmpty) {
             Log.w(TAG, "No documents found in Firestore collection 'resources'")
             return
         }
 
         val entries = snapshot.documents.mapNotNull { doc ->
-            val filename = doc.getString("filename")?.trim().orEmpty()
+            val rawFilename = doc.getString("filename")
+            val filename = rawFilename?.trim().orEmpty()
             val content = doc.getString("content")
             if (filename.isEmpty() || content == null) {
-                Log.w(TAG, "Skipping resource document ${doc.id} due to missing fields")
+                val reason = when {
+                    rawFilename.isNullOrBlank() -> "missing or blank filename"
+                    content == null -> "missing content"
+                    else -> "unknown validation failure"
+                }
+                Log.w(
+                    TAG,
+                    "Skipping resource document id=${doc.id} filename='${rawFilename.orEmpty()}': $reason"
+                )
                 null
             } else {
                 try {
                     normalizePath(filename) to content
                 } catch (e: IllegalArgumentException) {
-                    Log.w(TAG, "Skipping resource document ${doc.id}: ${e.message}")
+                    Log.w(
+                        TAG,
+                        "Skipping resource document id=${doc.id} filename='${filename}': ${e.message}"
+                    )
                     null
                 }
             }
@@ -112,21 +126,49 @@ object LlmResources {
                 .forEach { file ->
                     val relative = directory.toPath().relativize(file.toPath()).toString().replace(File.separatorChar, '/')
                     if (relative !in keep) {
-                        file.delete()
+                        try {
+                            if (file.delete()) {
+                                Log.i(TAG, "Deleted stale resource ${file.absolutePath}")
+                            } else if (file.exists()) {
+                                Log.e(TAG, "Failed to delete stale resource ${file.absolutePath}")
+                            }
+                        } catch (e: SecurityException) {
+                            Log.e(TAG, "Error deleting stale resource ${file.absolutePath}", e)
+                            throw e
+                        }
                     }
                 }
 
             for ((name, content) in orderedEntries) {
                 val target = File(directory, name)
-                target.parentFile?.mkdirs()
-                target.writeText(content)
+                val parent = target.parentFile
+                if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                    Log.w(TAG, "Unable to create directory ${parent.absolutePath} for resource ${target.absolutePath}")
+                }
+                val existed = target.exists()
+                try {
+                    target.writeText(content)
+                    val operation = if (existed) "Updated" else "Created"
+                    Log.i(TAG, "$operation resource ${target.absolutePath}")
+                } catch (e: IOException) {
+                    Log.e(TAG, "Error writing resource ${target.absolutePath}", e)
+                    throw e
+                }
             }
 
-            versionFile.writeText(newHash)
+            try {
+                versionFile.writeText(newHash)
+            } catch (e: IOException) {
+                Log.e(TAG, "Error writing version hash to ${versionFile.absolutePath}", e)
+                throw e
+            }
         }
 
         overrides = orderedEntries.toMap()
-        Log.i(TAG, "LLM resources updated successfully (new version: $isNewVersion)")
+        Log.i(
+            TAG,
+            "LLM resources refresh complete for ${directory.absolutePath} (versionHash=$newHash, newVersion=$isNewVersion)"
+        )
     }
 
     private fun loadOverridesFromDisk(root: File): Map<String, String> {
