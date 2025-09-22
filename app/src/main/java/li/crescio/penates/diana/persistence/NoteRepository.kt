@@ -365,46 +365,47 @@ class NoteRepository(
     }
 
     private fun noteToMap(note: StructuredNote): Map<String, Any> = when (note) {
-        is StructuredNote.ToDo -> mapOf(
-            "type" to "todo",
-            "text" to note.text,
-            "status" to note.status,
-            "tags" to note.tags,
-            "dueDate" to note.dueDate,
-            "eventDate" to note.eventDate,
-            "datetime" to "",
-            "location" to "",
-            "createdAt" to note.createdAt,
-            "id" to note.id
-        )
-        is StructuredNote.Memo -> mapOf(
-            "type" to "memo",
-            "text" to note.text,
-            "tags" to note.tags,
-            "datetime" to "",
-            "location" to "",
-            "createdAt" to note.createdAt
-        ).let { base ->
-            val map = base.toMutableMap()
-            note.sectionAnchor?.takeIf { it.isNotBlank() }?.let { map["sectionAnchor"] = it }
-            note.sectionTitle?.takeIf { it.isNotBlank() }?.let { map["sectionTitle"] = it }
-            map
-        )
-        is StructuredNote.Event -> mapOf(
-            "type" to "event",
-            "text" to note.text,
-            "datetime" to note.datetime,
-            "location" to note.location,
-            "createdAt" to note.createdAt
-        )
-        is StructuredNote.Free -> mapOf(
-            "type" to "free",
-            "text" to note.text,
-            "tags" to note.tags,
-            "datetime" to "",
-            "location" to "",
-            "createdAt" to note.createdAt
-        )
+
+        is StructuredNote.ToDo -> buildMap<String, Any> {
+            put("type", "todo")
+            put("text", note.text)
+            put("status", note.status)
+            put("tags", note.tags)
+            put("datetime", "")
+            put("location", "")
+            put("createdAt", note.createdAt)
+            put("id", note.id)
+            note.dueDate?.let { put("dueDate", it) }
+            note.eventDate?.let { put("eventDate", it) }
+        }
+
+        is StructuredNote.Memo -> buildMap<String, Any> {
+            put("type", "memo")
+            put("text", note.text)
+            put("tags", note.tags)
+            put("datetime", "")
+            put("location", "")
+            put("createdAt", note.createdAt)
+            note.sectionAnchor?.takeIf { it.isNotBlank() }?.let { put("sectionAnchor", it) }
+            note.sectionTitle?.takeIf { it.isNotBlank() }?.let { put("sectionTitle", it) }
+        }
+
+        is StructuredNote.Event -> buildMap<String, Any> {
+            put("type", "event")
+            put("text", note.text)
+            put("createdAt", note.createdAt)
+            note.datetime?.let { put("datetime", it) }
+            note.location?.let { put("location", it) }
+        }
+
+        is StructuredNote.Free -> buildMap<String, Any> {
+            put("type", "free")
+            put("text", note.text)
+            put("tags", note.tags)
+            put("datetime", "")
+            put("location", "")
+            put("createdAt", note.createdAt)
+        }
     }
 
     private fun parse(line: String): StructuredNote? {
