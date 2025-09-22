@@ -15,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Snackbar
@@ -23,6 +24,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -1043,36 +1047,77 @@ private fun SessionTab(
         )
     }
     if (showDeleteDialog) {
-        val deleteLocalLabel = stringResource(R.string.delete_session_local_action)
-        val deleteRemoteLabel = stringResource(R.string.delete_session_remote_action)
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text(stringResource(R.string.delete_session_title)) },
-            text = { Text(stringResource(R.string.delete_session_message, session.name)) },
-            confirmButton = {
-                Row(
+        DeleteSessionDialog(
+            sessionName = session.name,
+            onDismiss = { showDeleteDialog = false },
+            onDeleteLocal = onDeleteLocal,
+            onDeleteRemote = onDeleteRemote
+        )
+    }
+}
+
+@Composable
+private fun DeleteSessionDialog(
+    sessionName: String,
+    onDismiss: () -> Unit,
+    onDeleteLocal: () -> Unit,
+    onDeleteRemote: () -> Unit,
+) {
+    val deleteLocalLabel = stringResource(R.string.delete_session_local_action)
+    val deleteRemoteLabel = stringResource(R.string.delete_session_remote_action)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.delete_session_title)) },
+        text = { Text(stringResource(R.string.delete_session_message, sessionName)) },
+        confirmButton = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
-                ) {
-                    TextButton(onClick = {
-                        showDeleteDialog = false
+                    onClick = {
+                        onDismiss()
                         onDeleteLocal()
-                    }) {
-                        Text(deleteLocalLabel)
                     }
-                    TextButton(onClick = {
-                        showDeleteDialog = false
-                        onDeleteRemote()
-                    }) {
-                        Text(deleteRemoteLabel)
-                    }
+                ) {
+                    Text(deleteLocalLabel)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text(stringResource(R.string.cancel))
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    onClick = {
+                        onDismiss()
+                        onDeleteRemote()
+                    }
+                ) {
+                    Text(deleteRemoteLabel)
                 }
             }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Preview(name = "Delete session dialog – phone", widthDp = 320, showBackground = true)
+@Preview(name = "Delete session dialog – tablet", widthDp = 600, showBackground = true)
+@Composable
+private fun DeleteSessionDialogPreview() {
+    DianaTheme {
+        DeleteSessionDialog(
+            sessionName = "Strategy Sync",
+            onDismiss = {},
+            onDeleteLocal = {},
+            onDeleteRemote = {}
         )
     }
 }
