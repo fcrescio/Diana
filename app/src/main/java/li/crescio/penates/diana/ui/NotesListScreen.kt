@@ -15,7 +15,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import li.crescio.penates.diana.R
@@ -191,6 +195,7 @@ private fun ThoughtsSection(
                 modifier = Modifier
                     .weight(0.65f)
                     .fillMaxHeight()
+                    .testTag("thought-markdown")
             )
         }
 
@@ -264,7 +269,8 @@ private fun MarkdownViewer(
     val context = LocalContext.current
     val markwon = remember(context) { Markwon.builder(context).build() }
     AndroidView(
-        modifier = modifier,
+        modifier = modifier
+            .semantics { this.text = AnnotatedString(markdown) },
         factory = { ctx ->
             ScrollView(ctx).apply {
                 isFillViewport = true
@@ -312,7 +318,7 @@ private fun flattenOutline(
     return items
 }
 
-private data class SectionTagIndex(
+internal data class SectionTagIndex(
     val anchorTags: Map<String, Set<String>>,
     val titleTags: Map<String, Set<String>>,
     val freeTags: Set<String>,
@@ -324,13 +330,13 @@ private data class SectionTagIndex(
     }
 }
 
-private fun SectionTagIndex.tagsFor(section: ThoughtOutlineSection): Set<String> {
+internal fun SectionTagIndex.tagsFor(section: ThoughtOutlineSection): Set<String> {
     anchorTags[section.anchor]?.takeIf { it.isNotEmpty() }?.let { return it }
     titleTags[section.title]?.takeIf { it.isNotEmpty() }?.let { return it }
     return emptySet()
 }
 
-private fun buildSectionTagIndex(notes: List<StructuredNote>): SectionTagIndex {
+internal fun buildSectionTagIndex(notes: List<StructuredNote>): SectionTagIndex {
     val anchorTags = mutableMapOf<String, MutableSet<String>>()
     val titleTags = mutableMapOf<String, MutableSet<String>>()
     val freeTags = mutableSetOf<String>()
@@ -364,7 +370,7 @@ private fun buildSectionTagIndex(notes: List<StructuredNote>): SectionTagIndex {
     )
 }
 
-private fun extractSectionMarkdown(
+internal fun extractSectionMarkdown(
     markdown: String,
     section: ThoughtOutlineSection,
 ): String {

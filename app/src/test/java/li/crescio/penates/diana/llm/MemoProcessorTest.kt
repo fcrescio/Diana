@@ -461,4 +461,61 @@ class MemoProcessorTest {
 
         server.shutdown()
     }
+
+    @Test
+    fun process_generatesDefaultAnchorsForOutline() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+
+        val server = MockWebServer()
+        fun thoughtCompletion(markdown: String, sections: JSONArray, items: JSONArray): String {
+            val payload = JSONObject()
+                .put("updated_markdown", markdown)
+                .put("sections", sections)
+                .put("items", items)
+            val message = JSONObject().put("content", payload.toString())
+            val choice = JSONObject().put("message", message)
+            val choices = JSONArray().put(choice)
+            return JSONObject().put("choices", choices).toString()
+        }
+
+        val sections = JSONArray().put(
+            JSONObject()
+                .put("title", "Summary")
+                .put("level", 1)
+                .put("anchor", "")
+                .put("children", JSONArray())
+        )
+        val items = JSONArray().put(
+            JSONObject()
+                .put("text", "Review findings")
+                .put("tags", JSONArray())
+        )
+        val markdown = "# Summary\n\nFindings"
+        server.enqueue(
+            MockResponse()
+                .setBody(thoughtCompletion(markdown, sections, items))
+                .setResponseCode(200)
+        )
+        server.start()
+
+        val processor = MemoProcessor(
+            apiKey = "key",
+            logger = mockk(relaxed = true),
+            locale = Locale.ENGLISH,
+            baseUrl = server.url("/").toString(),
+            client = OkHttpClient(),
+        )
+
+        val summary = processor.process(
+            Memo("summary"),
+            processTodos = false,
+            processAppointments = false,
+        )
+
+        val outline = requireNotNull(summary.thoughtDocument).outline.sections
+        assertEquals(1, outline.size)
+        assertEquals("summary", outline.first().anchor)
+
+        server.shutdown()
+    }
 }
