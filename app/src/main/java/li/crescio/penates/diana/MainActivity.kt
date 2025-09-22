@@ -325,8 +325,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+//        }
         }
-    }
 
     private fun ensureInitialSession(sessionRepository: SessionRepository): SessionInitialization {
         val selected = sessionRepository.getSelected()
