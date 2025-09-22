@@ -61,6 +61,7 @@ import li.crescio.penates.diana.llm.MemoSummary
 import li.crescio.penates.diana.llm.Thought
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.notes.StructuredNote
+import li.crescio.penates.diana.notes.ThoughtDocument
 import li.crescio.penates.diana.persistence.NoteRepository
 import li.crescio.penates.diana.player.AndroidPlayer
 import li.crescio.penates.diana.player.Player
@@ -415,6 +416,7 @@ fun DianaApp(
     var todoItems by remember(session.id) { mutableStateOf(listOf<TodoItem>()) }
     var appointments by remember(session.id) { mutableStateOf(listOf<Appointment>()) }
     var thoughtNotes by remember(session.id) { mutableStateOf(listOf<StructuredNote>()) }
+    var thoughtDocument by remember(session.id) { mutableStateOf<ThoughtDocument?>(null) }
     val scope = rememberCoroutineScope()
     val player: Player = remember { AndroidPlayer() }
     val logRecorded = stringResource(R.string.log_recorded_memo)
@@ -511,7 +513,8 @@ fun DianaApp(
             thoughts = thoughtItems.joinToString("\n") { it.text },
             todoItems = todoItems,
             appointmentItems = appointments,
-            thoughtItems = thoughtItems
+            thoughtItems = thoughtItems,
+            thoughtDocument = thoughtDocument,
         )
         todo = todoText
         scope.launch { processor.initialize(summary) }
@@ -529,6 +532,7 @@ fun DianaApp(
         val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
         todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate, it.id) }
         appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
+        thoughtDocument = repository.loadThoughtDocument()
         thoughtNotes = memoNotes + freeNotes
         syncProcessor()
     }
@@ -554,10 +558,14 @@ fun DianaApp(
                 }
                 if (processThoughts) {
                     thoughtNotes = summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
+                    thoughtDocument = summary.thoughtDocument ?: thoughtDocument
                 }
                 val saved = repository.saveSummary(summary, processTodos, processAppointments, processThoughts)
                 if (processTodos) {
                     todoItems = saved.todoItems
+                }
+                if (processThoughts) {
+                    thoughtDocument = saved.thoughtDocument ?: thoughtDocument
                 }
                 processor.initialize(saved)
                 screen = Screen.List
@@ -681,6 +689,7 @@ fun DianaApp(
                 todoItems,
                 appointments,
                 thoughtNotes,
+                thoughtDocument,
                 logs,
                 processTodos,
                 processAppointments,
@@ -792,6 +801,7 @@ fun DianaApp(
                     scope.launch {
                         repository.clearThoughts()
                         thoughtNotes = emptyList()
+                        thoughtDocument = null
                         syncProcessor()
                     }
                 },

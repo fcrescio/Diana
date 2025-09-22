@@ -7,6 +7,9 @@
     <string name="appointments">Appointments</string>
     <string name="thoughts_notes">Thoughts &amp; Notes</string>
     <string name="filter_tag">Filter by tag</string>
+    <string name="thoughts_outline_missing">No structured thought document available yet. Process a memo to generate one.</string>
+    <string name="thoughts_outline_no_match">No sections match the selected tag.</string>
+    <string name="thoughts_tags_label">Tags</string>
     <string name="back">Back</string>
     <string name="play">Play</string>
     <string name="reprocess">Reprocess</string>
