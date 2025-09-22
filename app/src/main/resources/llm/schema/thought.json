@@ -3,7 +3,11 @@
   "schema": {
     "type": "object",
     "properties": {
-      "updated": { "type": "string" },
+      "updated_markdown": { "type": "string" },
+      "sections": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/section" }
+      },
       "items": {
         "type": "array",
         "items": {
@@ -19,7 +23,22 @@
         }
       }
     },
-    "required": ["updated", "items"]
+    "required": ["updated_markdown", "sections", "items"],
+    "$defs": {
+      "section": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "level": { "type": "integer" },
+          "anchor": { "type": "string" },
+          "children": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/section" }
+          }
+        },
+        "required": ["title", "level", "anchor", "children"]
+      }
+    }
   },
   "strict": true
 }
