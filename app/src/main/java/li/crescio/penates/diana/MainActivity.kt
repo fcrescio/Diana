@@ -46,6 +46,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.launch
@@ -85,35 +86,44 @@ class MainActivity : ComponentActivity() {
         val sessionInitialization = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
-        FirebaseAuth.getInstance().signInAnonymously()
-            .addOnSuccessListener {
-                lifecycleScope.launch {
+        fun launchApplication(canRefreshOverrides: Boolean, authException: Exception?) {
+            lifecycleScope.launch {
+                if (canRefreshOverrides) {
+                    Log.i("MainActivity", "LLM refresh: start (remote overrides enabled)")
+                    var refreshResult = "completed successfully"
                     try {
                         LlmResources.refreshFromFirestore(firestore)
                     } catch (e: Exception) {
+                        refreshResult = "failed: ${e.message ?: "no message"}"
                         Log.e("MainActivity", "Failed to update LLM resources", e)
                     }
-                    if (sessionInitialization.createdDefaultSession) {
-                        migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
-                    }
-                    val initialEnvironment = createSessionEnvironment(sessionInitialization.session, firestore)
-                    val initialImportSessions = try {
-                        sessionRepository.fetchRemoteSessions()
-                    } catch (e: Exception) {
-                        Log.w("MainActivity", "Failed to fetch remote sessions", e)
-                        emptyList()
-                    }
-                    val testDoc = firestore.collection("test").document("init")
-                    testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
-                        testDoc.get().addOnFailureListener { e ->
-                            if (e is FirebaseFirestoreException &&
-                                e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-                            ) {
-                                Log.e("MainActivity", permissionMessage, e)
-                                Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }.addOnFailureListener { e ->
+                    Log.i("MainActivity", "LLM refresh: end ($refreshResult)")
+                } else {
+                    val authCode = (authException as? FirebaseAuthException)?.errorCode
+                    val message = authException?.message ?: "unknown error"
+                    val codeInfo = authCode?.let { "code=$it, " } ?: ""
+                    Log.w(
+                        "MainActivity",
+                        "LLM refresh: start (skipped due to auth failure: ${codeInfo}message=$message)",
+                    )
+                    Log.w(
+                        "MainActivity",
+                        "LLM refresh: end (skipped due to auth failure: ${codeInfo}message=$message)",
+                    )
+                }
+                if (sessionInitialization.createdDefaultSession) {
+                    migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
+                }
+                val initialEnvironment = createSessionEnvironment(sessionInitialization.session, firestore)
+                val initialImportSessions = try {
+                    sessionRepository.fetchRemoteSessions()
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "Failed to fetch remote sessions", e)
+                    emptyList()
+                }
+                val testDoc = firestore.collection("test").document("init")
+                testDoc.set(mapOf("ping" to "pong")).addOnSuccessListener {
+                    testDoc.get().addOnFailureListener { e ->
                         if (e is FirebaseFirestoreException &&
                             e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
                         ) {
@@ -121,7 +131,15 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
                         }
                     }
-                    setContent {
+                }.addOnFailureListener { e ->
+                    if (e is FirebaseFirestoreException &&
+                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+                    ) {
+                        Log.e("MainActivity", permissionMessage, e)
+                        Toast.makeText(this@MainActivity, permissionMessage, Toast.LENGTH_LONG).show()
+                    }
+                }
+                setContent {
                         var environment by remember { mutableStateOf(initialEnvironment) }
                         val sessionsState = remember {
                             mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
@@ -266,9 +284,26 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            .addOnFailureListener { e ->
-                Log.e("MainActivity", "Firebase authentication failed", e)
-                Toast.makeText(this, "Authentication failed", Toast.LENGTH_LONG).show()
+        }
+
+        FirebaseAuth.getInstance().signInAnonymously()
+            .addOnSuccessListener {
+                launchApplication(true, null)
+            }
+            .addOnFailureListener { exception ->
+                val authCode = (exception as? FirebaseAuthException)?.errorCode
+                val codeInfo = authCode?.let { " (code: $it)" } ?: ""
+                Log.e(
+                    "MainActivity",
+                    "Anonymous auth failed$codeInfo; remote LLM overrides will be skipped.",
+                    exception,
+                )
+                Toast.makeText(
+                    this@MainActivity,
+                    "Authentication failed; remote LLM overrides will be skipped.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                launchApplication(false, exception)
             }
     }
 
