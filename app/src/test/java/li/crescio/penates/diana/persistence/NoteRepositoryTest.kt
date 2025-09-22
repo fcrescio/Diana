@@ -15,9 +15,15 @@ import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.llm.Appointment
 import li.crescio.penates.diana.llm.Thought
 import li.crescio.penates.diana.notes.StructuredNote
+import li.crescio.penates.diana.notes.ThoughtDocument
+import li.crescio.penates.diana.notes.ThoughtOutline
+import li.crescio.penates.diana.notes.ThoughtOutlineSection
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import kotlin.io.path.createTempFile
 
 private const val SESSION_ID = "test-session"
@@ -101,6 +107,199 @@ class NoteRepositoryTest {
         val result = repo.saveSummary(summary)
 
         assertEquals("generated", result.todoItems[0].id)
+    }
+
+    @Test
+    fun saveSummary_persistsThoughtDocument() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val notesFile = createTempFile().toFile()
+        val parent = notesFile.absoluteFile.parentFile
+        val markdownFile = File(parent, "thoughts.md")
+        val outlineFile = File(parent, "thought_outline.json")
+
+        val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
+        val collection = mockk<CollectionReference>()
+        val docRef = mockk<DocumentReference>()
+
+        val capturedDoc = mutableListOf<Map<String, Any>>()
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
+        every { collection.add(any()) } returns Tasks.forResult(mockk())
+        every { collection.document(any()) } returns docRef
+        every { docRef.set(any()) } answers {
+            capturedDoc.add(firstArg())
+            Tasks.forResult(null)
+        }
+
+        val repo = NoteRepository(firestore, SESSION_ID, notesFile)
+        val document = ThoughtDocument(
+            markdownBody = "# Heading\n\n## Sub\n\nDetails.",
+            outline = ThoughtOutline(
+                listOf(
+                    ThoughtOutlineSection(
+                        title = "Heading",
+                        level = 1,
+                        anchor = "heading",
+                        children = listOf(
+                            ThoughtOutlineSection("Sub", 2, "sub")
+                        )
+                    )
+                )
+            ),
+        )
+        val summary = MemoSummary(
+            todo = "",
+            appointments = "",
+            thoughts = "",
+            todoItems = emptyList(),
+            appointmentItems = emptyList(),
+            thoughtItems = emptyList(),
+            thoughtDocument = document,
+        )
+
+        repo.saveSummary(summary, saveTodos = false, saveAppointments = false, saveThoughts = true)
+
+        assertTrue(markdownFile.exists())
+        assertEquals(document.markdownBody, markdownFile.readText())
+        assertTrue(outlineFile.exists())
+        val outlineJson = JSONObject(outlineFile.readText())
+        val sections = outlineJson.getJSONArray("sections")
+        assertEquals(1, sections.length())
+        val root = sections.getJSONObject(0)
+        assertEquals("Heading", root.getString("title"))
+        val children = root.getJSONArray("children")
+        assertEquals(1, children.length())
+        assertEquals("Sub", children.getJSONObject(0).getString("title"))
+
+        assertEquals(1, capturedDoc.size)
+        val remote = capturedDoc.first()
+        assertEquals("thought_document", remote["type"])
+        assertEquals(document.markdownBody, remote["markdown"])
+        val remoteOutline = remote["outline"] as List<*>
+        assertEquals(1, remoteOutline.size)
+        val remoteRoot = remoteOutline.first() as Map<*, *>
+        assertEquals("Heading", remoteRoot["title"])
+        val remoteChildren = remoteRoot["children"] as List<*>
+        assertEquals(1, remoteChildren.size)
+        val remoteChild = remoteChildren.first() as Map<*, *>
+        assertEquals("Sub", remoteChild["title"])
+    }
+
+    @Test
+    fun loadThoughtDocument_prefersLocalArtifacts() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val notesFile = createTempFile().toFile()
+        val parent = notesFile.absoluteFile.parentFile
+        val markdownFile = File(parent, "thoughts.md")
+        markdownFile.writeText("# Local Heading\n\nDetails.")
+        val outlineFile = File(parent, "thought_outline.json")
+        val outlineJson = JSONObject()
+        val sections = JSONObject()
+            .put("title", "Local Heading")
+            .put("level", 1)
+            .put("anchor", "local-heading")
+            .put("children", org.json.JSONArray())
+        outlineJson.put("sections", org.json.JSONArray().put(sections))
+        outlineFile.writeText(outlineJson.toString())
+
+        val repo = NoteRepository(mockk(relaxed = true), SESSION_ID, notesFile)
+
+        val document = repo.loadThoughtDocument()
+
+        assertNotNull(document)
+        val result = requireNotNull(document)
+        assertEquals("# Local Heading\n\nDetails.", result.markdownBody)
+        assertEquals(1, result.outline.sections.size)
+        assertEquals("local-heading", result.outline.sections.first().anchor)
+    }
+
+    @Test
+    fun loadThoughtDocument_fetchesRemoteWhenMissingLocal() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val notesFile = createTempFile().toFile()
+        val parent = notesFile.absoluteFile.parentFile
+        val markdownFile = File(parent, "thoughts.md")
+        val outlineFile = File(parent, "thought_outline.json")
+
+        val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
+        val collection = mockk<CollectionReference>()
+        val docRef = mockk<DocumentReference>()
+        val snapshot = mockk<DocumentSnapshot>()
+
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
+        every { collection.document(any()) } returns docRef
+        every { docRef.get() } returns Tasks.forResult(snapshot)
+        every { snapshot.data } returns mutableMapOf(
+            "type" to "thought_document",
+            "markdown" to "# Remote Heading",
+            "outline" to listOf(
+                mapOf(
+                    "title" to "Remote Heading",
+                    "level" to 1,
+                    "anchor" to "remote-heading",
+                    "children" to emptyList<Map<String, Any>>()
+                )
+            )
+        )
+
+        val repo = NoteRepository(firestore, SESSION_ID, notesFile)
+
+        val document = repo.loadThoughtDocument()
+
+        assertNotNull(document)
+        val result = requireNotNull(document)
+        assertEquals("# Remote Heading", result.markdownBody)
+        assertEquals(1, result.outline.sections.size)
+        assertEquals("remote-heading", result.outline.sections.first().anchor)
+
+        assertTrue(markdownFile.exists())
+        assertTrue(outlineFile.exists())
+    }
+
+    @Test
+    fun clearThoughts_removesThoughtDocumentArtifacts() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+        val notesFile = createTempFile().toFile()
+        val parent = notesFile.absoluteFile.parentFile
+        val markdownFile = File(parent, "thoughts.md").apply { writeText("content") }
+        val outlineFile = File(parent, "thought_outline.json").apply {
+            writeText(JSONObject().put("sections", org.json.JSONArray()).toString())
+        }
+        val memo = StructuredNote.Memo("note", tags = emptyList(), createdAt = 1L)
+        notesFile.writeText(JSONObject(expectedMap(memo)).toString())
+
+        val firestore = mockk<FirebaseFirestore>()
+        val sessionsCollection = mockk<CollectionReference>()
+        val sessionDocument = mockk<DocumentReference>()
+        val collection = mockk<CollectionReference>()
+        val querySnapshot = mockk<QuerySnapshot>()
+        val docRef = mockk<DocumentReference>()
+
+        every { firestore.collection("sessions") } returns sessionsCollection
+        every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
+        every { sessionDocument.collection("notes") } returns collection
+        every { collection.whereEqualTo(any(), any()) } returns collection
+        every { collection.get() } returns Tasks.forResult(querySnapshot)
+        every { querySnapshot.documents } returns emptyList()
+        every { collection.document(any()) } returns docRef
+        every { docRef.delete() } returns Tasks.forResult(null)
+
+        val repo = NoteRepository(firestore, SESSION_ID, notesFile)
+
+        repo.clearThoughts()
+
+        assertTrue(!markdownFile.exists())
+        assertTrue(!outlineFile.exists())
+        assertTrue(notesFile.readText().isBlank())
+        verify { collection.document("__thought_document__") }
+        verify { docRef.delete() }
     }
 
     @Test
@@ -320,14 +519,16 @@ class NoteRepositoryTest {
             "createdAt" to note.createdAt,
             "id" to note.id
         )
-        is StructuredNote.Memo -> mapOf<String, Any>(
-            "type" to "memo",
-            "text" to note.text,
-            "tags" to note.tags,
-            "datetime" to "",
-            "location" to "",
-            "createdAt" to note.createdAt
-        )
+        is StructuredNote.Memo -> buildMap {
+            put("type", "memo")
+            put("text", note.text)
+            put("tags", note.tags)
+            put("datetime", "")
+            put("location", "")
+            put("createdAt", note.createdAt)
+            note.sectionAnchor?.takeIf { it.isNotBlank() }?.let { put("sectionAnchor", it) }
+            note.sectionTitle?.takeIf { it.isNotBlank() }?.let { put("sectionTitle", it) }
+        }
         is StructuredNote.Event -> mapOf<String, Any>(
             "type" to "event",
             "text" to note.text,
@@ -361,6 +562,8 @@ class NoteRepositoryTest {
         obj.optString("dueDate", null)?.let { map["dueDate"] = it }
         obj.optString("eventDate", null)?.let { map["eventDate"] = it }
         obj.optString("id", null)?.let { map["id"] = it }
+        obj.optString("sectionAnchor", null)?.takeIf { it.isNotBlank() }?.let { map["sectionAnchor"] = it }
+        obj.optString("sectionTitle", null)?.takeIf { it.isNotBlank() }?.let { map["sectionTitle"] = it }
         return map
     }
 }
