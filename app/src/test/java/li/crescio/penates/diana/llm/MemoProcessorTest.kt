@@ -5,6 +5,7 @@ import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.llm.TodoItem
+import li.crescio.penates.diana.llm.Thought
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -34,8 +35,18 @@ class MemoProcessorTest {
             val choices = JSONArray().put(choice)
             return JSONObject().put("choices", choices).toString()
         }
-        fun completion(updated: String): String {
+        fun appointmentCompletion(updated: String): String {
             val message = JSONObject().put("content", "{\"updated\":\"$updated\"}")
+            val choice = JSONObject().put("message", message)
+            val choices = JSONArray().put(choice)
+            return JSONObject().put("choices", choices).toString()
+        }
+        fun thoughtCompletion(markdown: String, sections: JSONArray, items: JSONArray): String {
+            val payload = JSONObject()
+                .put("updated_markdown", markdown)
+                .put("sections", sections)
+                .put("items", items)
+            val message = JSONObject().put("content", payload.toString())
             val choice = JSONObject().put("message", message)
             val choices = JSONArray().put(choice)
             return JSONObject().put("choices", choices).toString()
@@ -45,9 +56,26 @@ class MemoProcessorTest {
             .put("text", "todo updated")
             .put("status", "not_started")
             .put("tags", JSONArray().put("tag"))
+        val thoughtSections = JSONArray().put(
+            JSONObject()
+                .put("title", "Overview")
+                .put("level", 1)
+                .put("anchor", "overview")
+                .put("children", JSONArray())
+        )
+        val thoughtItems = JSONArray().put(
+            JSONObject()
+                .put("text", "Review the new plan")
+                .put("tags", JSONArray().put("planning"))
+        )
+        val thoughtMarkdown = "# Overview\n\nDetailed notes."
         server.enqueue(MockResponse().setBody(completionTodo(todoItem)).setResponseCode(200))
-        server.enqueue(MockResponse().setBody(completion("appointments updated")).setResponseCode(200))
-        server.enqueue(MockResponse().setBody(completion("thoughts updated")).setResponseCode(200))
+        server.enqueue(MockResponse().setBody(appointmentCompletion("appointments updated")).setResponseCode(200))
+        server.enqueue(
+            MockResponse()
+                .setBody(thoughtCompletion(thoughtMarkdown, thoughtSections, thoughtItems))
+                .setResponseCode(200)
+        )
         server.start()
 
         val logger = mockk<LlmLogger>(relaxed = true)
@@ -63,8 +91,14 @@ class MemoProcessorTest {
 
         assertEquals("todo updated", summary.todo)
         assertEquals("appointments updated", summary.appointments)
-        assertEquals("thoughts updated", summary.thoughts)
+        assertEquals(thoughtMarkdown, summary.thoughts)
         assertTrue(summary.appointmentItems.isEmpty())
+        val document = summary.thoughtDocument
+        requireNotNull(document)
+        assertEquals(thoughtMarkdown, document.markdownBody)
+        assertEquals(1, document.outline.sections.size)
+        assertEquals("overview", document.outline.sections.first().anchor)
+        assertEquals(listOf(Thought("Review the new plan", listOf("planning"))), summary.thoughtItems)
         verify(exactly = 3) { logger.log(any(), any()) }
 
         server.shutdown()
@@ -234,6 +268,8 @@ class MemoProcessorTest {
 
         assertTrue(content.contains(memoText))
         val expectedPrior = JSONObject().apply {
+            put("markdown_body", tricky)
+            put("sections", JSONArray())
             val itemsArr = JSONArray()
             val itemObj = JSONObject()
                 .put("text", tricky)
@@ -243,6 +279,62 @@ class MemoProcessorTest {
             put("items", itemsArr)
         }.toString()
         assertTrue(content.contains(expectedPrior))
+
+        server.shutdown()
+    }
+
+    @Test
+    fun process_populatesThoughtDocumentOutline() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+
+        val server = MockWebServer()
+        val childSection = JSONObject()
+            .put("title", "Sub Topic")
+            .put("level", 2)
+            .put("anchor", "custom")
+            .put("children", JSONArray())
+        val rootSection = JSONObject()
+            .put("title", "Main Topic")
+            .put("level", 1)
+            .put("anchor", "")
+            .put("children", JSONArray().put(childSection))
+        val sections = JSONArray().put(rootSection)
+        val items = JSONArray().put(
+            JSONObject()
+                .put("text", "Reflect on sub topic")
+                .put("tags", JSONArray().put("reflection"))
+        )
+        val payload = JSONObject()
+            .put("updated_markdown", "# Main Topic\n\n## Sub Topic\n\nDetails.")
+            .put("sections", sections)
+            .put("items", items)
+        val message = JSONObject().put("content", payload.toString())
+        val choice = JSONObject().put("message", message)
+        val body = JSONObject().put("choices", JSONArray().put(choice)).toString()
+        server.enqueue(MockResponse().setBody(body).setResponseCode(200))
+        server.start()
+
+        val processor = MemoProcessor(
+            apiKey = "key",
+            logger = mockk(relaxed = true),
+            locale = Locale.ENGLISH,
+            baseUrl = server.url("/").toString(),
+            client = OkHttpClient(),
+        )
+
+        val summary = processor.process(
+            Memo("new thought"),
+            processTodos = false,
+            processAppointments = false,
+        )
+
+        val outline = requireNotNull(summary.thoughtDocument).outline
+        assertEquals(1, outline.sections.size)
+        val root = outline.sections.first()
+        assertEquals("main-topic", root.anchor)
+        assertEquals(1, root.children.size)
+        assertEquals("custom", root.children.first().anchor)
+        assertEquals(listOf("reflection"), summary.thoughtItems.first().tags)
 
         server.shutdown()
     }

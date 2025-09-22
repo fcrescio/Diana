@@ -21,6 +21,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayDeque
 import android.util.Log
 import li.crescio.penates.diana.notes.ThoughtDocument
+import li.crescio.penates.diana.notes.ThoughtOutline
+import li.crescio.penates.diana.notes.ThoughtOutlineSection
 
 private fun loadResource(path: String): String = LlmResources.load(path)
 
@@ -51,6 +53,7 @@ class MemoProcessor(
     private var appointmentItems: List<Appointment> = emptyList()
     private var thoughts: String = ""
     private var thoughtItems: List<Thought> = emptyList()
+    private var thoughtDocument: ThoughtDocument? = null
 
     private val prompts = Prompts.forLocale(locale)
 
@@ -84,8 +87,9 @@ class MemoProcessor(
         todoItems = summary.todoItems
         appointments = summary.appointments
         appointmentItems = summary.appointmentItems
-        thoughts = summary.thoughts
+        thoughts = summary.thoughtDocument?.markdownBody ?: summary.thoughts
         thoughtItems = summary.thoughtItems
+        thoughtDocument = summary.thoughtDocument
     }
 
     /**
@@ -106,7 +110,15 @@ class MemoProcessor(
         if (processThoughts) {
             thoughts = updateBuffer(prompts.thoughts, thoughtPriorJson(), memo.text)
         }
-        return MemoSummary(todo, appointments, thoughts, todoItems, appointmentItems, thoughtItems)
+        return MemoSummary(
+            todo,
+            appointments,
+            thoughts,
+            todoItems,
+            appointmentItems,
+            thoughtItems,
+            thoughtDocument,
+        )
     }
 
     private fun todoPriorJson(): String {
@@ -145,7 +157,11 @@ class MemoProcessor(
 
     private fun thoughtPriorJson(): String {
         val obj = JSONObject()
-        obj.put("updated", thoughts)
+        obj.put("markdown_body", thoughtDocument?.markdownBody ?: thoughts)
+        val outlineSections = thoughtDocument?.outline?.sections ?: emptyList()
+        obj.put("sections", JSONArray().apply {
+            outlineSections.forEach { put(outlineSectionToJson(it)) }
+        })
         val itemsArr = JSONArray()
         for (item in thoughtItems) {
             val itemObj = JSONObject()
@@ -157,6 +173,43 @@ class MemoProcessor(
         }
         obj.put("items", itemsArr)
         return obj.toString()
+    }
+
+    private fun outlineSectionToJson(section: ThoughtOutlineSection): JSONObject {
+        val obj = JSONObject()
+        obj.put("title", section.title)
+        obj.put("level", section.level)
+        obj.put("anchor", section.anchor)
+        val children = JSONArray()
+        section.children.forEach { child ->
+            children.put(outlineSectionToJson(child))
+        }
+        obj.put("children", children)
+        return obj
+    }
+
+    private fun parseOutlineSections(array: JSONArray?): List<ThoughtOutlineSection> {
+        if (array == null) return emptyList()
+        val sections = mutableListOf<ThoughtOutlineSection>()
+        for (i in 0 until array.length()) {
+            val obj = array.optJSONObject(i) ?: continue
+            val title = obj.optString("title").trim()
+            if (title.isBlank()) continue
+            val level = obj.optInt("level", 1)
+            val anchorValue = obj.optString("anchor").trim()
+            val anchor = if (anchorValue.isNotBlank()) anchorValue else defaultAnchor(title)
+            val children = parseOutlineSections(obj.optJSONArray("children"))
+            sections.add(ThoughtOutlineSection(title, level, anchor, children))
+        }
+        return sections
+    }
+
+    private fun defaultAnchor(title: String): String {
+        val slug = title.lowercase(Locale.ROOT)
+            .replace("[^a-z0-9\\s-]".toRegex(), "")
+            .trim()
+            .replace("\\s+".toRegex(), "-")
+        return if (slug.isNotBlank()) slug else "section-${Integer.toHexString(title.hashCode())}"
     }
 
     private fun buildRequest(system: String, user: String, schema: String): String {
@@ -201,6 +254,17 @@ class MemoProcessor(
             check((0 until (required?.length() ?: 0)).any { required!!.optString(it) == "items" }) {
                 "Schema missing 'items'"
             }
+        } else if (aspect == prompts.thoughts) {
+            val props = innerSchema.optJSONObject("properties")
+            val markdownProp = props?.optJSONObject("updated_markdown")
+            check(markdownProp?.optString("type") == "string") {
+                "Schema 'updated_markdown' must be string"
+            }
+            val sectionsProp = props?.optJSONObject("sections")
+            check(sectionsProp?.optString("type") == "array") { "Schema 'sections' must be array" }
+            val requiredFields = (0 until (required?.length() ?: 0)).map { required!!.optString(it) }
+            check(requiredFields.contains("updated_markdown")) { "Schema missing 'updated_markdown'" }
+            check(requiredFields.contains("sections")) { "Schema missing 'sections'" }
         } else {
             val updatedProp = innerSchema.optJSONObject("properties")?.optJSONObject("updated")
             check(updatedProp?.optString("type") == "string") { "Schema 'updated' must be string" }
@@ -302,7 +366,10 @@ class MemoProcessor(
                     val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     if (text.isBlank()) null else Thought(text, tags)
                 }
-                obj.optString("updated", thoughts)
+                val updatedMarkdown = obj.optString("updated_markdown", thoughts)
+                val sections = parseOutlineSections(obj.optJSONArray("sections"))
+                thoughtDocument = ThoughtDocument(updatedMarkdown, ThoughtOutline(sections))
+                updatedMarkdown
             }
             else -> obj.optString("updated", "")
         }
