@@ -41,6 +41,8 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--service-account",
+        "--credentials",
+        dest="service_account",
         type=Path,
         required=True,
         help="Path to the Firebase service account JSON key",
