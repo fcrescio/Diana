@@ -6,6 +6,7 @@ This log captures active initiatives and recent pushes so contributors can orien
 
 | Date       | Status      | Summary | Further detail |
 | ---------- | ----------- | ------- | -------------- |
+| 2025-09-24 | Planned     | Delete-session dialog polish: resolve overlapping confirmation controls and align with Material spacing rhythm. | [Delete-session dialog plan](thoughts/delete-session-dialog.md) |
 | 2025-09-22 | In progress | Thought-document refactor: migrate memo processing to produce markdown bodies and navigation outlines, update persistence, and expose the richer structure in the UI. | [Thought document refactor plan](thoughts/thought-document-plan.md) |
 
 ## Template for new entries
