@@ -20,6 +20,7 @@ import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayDeque
 import android.util.Log
+import li.crescio.penates.diana.notes.ThoughtDocument
 
 private fun loadResource(path: String): String = LlmResources.load(path)
 
@@ -328,7 +329,8 @@ data class MemoSummary(
     val thoughts: String,
     val todoItems: List<TodoItem>,
     val appointmentItems: List<Appointment>,
-    val thoughtItems: List<Thought>
+    val thoughtItems: List<Thought>,
+    val thoughtDocument: ThoughtDocument? = null,
 )
 
 data class Thought(val text: String, val tags: List<String>)
