@@ -11,16 +11,21 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 
+interface TagCatalogDataSource {
+    suspend fun loadCatalog(): TagCatalog
+    suspend fun saveCatalog(catalog: TagCatalog): TagCatalogSyncOutcome
+}
+
 class TagCatalogRepository(
     private val sessionId: String,
     private val sessionDir: File,
     private val firestore: FirebaseFirestore,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-) {
+): TagCatalogDataSource {
     private val catalogFile = File(sessionDir, "tags.json")
     private val mutex = Mutex()
 
-    suspend fun loadCatalog(): TagCatalog = withContext(dispatcher) {
+    override suspend fun loadCatalog(): TagCatalog = withContext(dispatcher) {
         val local = mutex.withLock { readLocalLocked() }
         if (local != null) {
             return@withContext local
@@ -33,7 +38,7 @@ class TagCatalogRepository(
         catalog
     }
 
-    suspend fun saveCatalog(catalog: TagCatalog): TagCatalogSyncOutcome = withContext(dispatcher) {
+    override suspend fun saveCatalog(catalog: TagCatalog): TagCatalogSyncOutcome = withContext(dispatcher) {
         mutex.withLock { writeLocalLocked(catalog) }
         val error = try {
             settingsDocument().set(catalog.toMap()).await()

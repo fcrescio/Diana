@@ -28,6 +28,7 @@ fun SettingsScreen(
     onProcessAppointmentsChange: (Boolean) -> Unit,
     onProcessThoughtsChange: (Boolean) -> Unit,
     onModelChange: (String) -> Unit,
+    onManageTags: () -> Unit,
     onClearTodos: () -> Unit,
     onClearAppointments: () -> Unit,
     onClearThoughts: () -> Unit,
@@ -106,6 +107,11 @@ fun SettingsScreen(
                     Text(label)
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onManageTags,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.manage_tags)) }
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onClearTodos,

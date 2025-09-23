@@ -624,7 +624,7 @@ class MemoProcessor(
                 }
                     .distinctBy { it.id }
                     .sortedWith(
-                        compareBy(String.CASE_INSENSITIVE_ORDER) { it.label }
+                        compareBy<TagDescriptor, String>(String.CASE_INSENSITIVE_ORDER) { it.label }
                             .thenBy { it.id },
                     )
                 if (descriptors.isEmpty()) {

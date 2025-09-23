@@ -45,4 +45,23 @@
     <string name="no_sessions">Aucune session</string>
     <string name="delete_memo_title">Supprimer le mémo</string>
     <string name="delete_memo_message">Voulez-vous vraiment supprimer ce mémo ?</string>
+    <string name="manage_tags">Gérer les tags</string>
+    <string name="tag_catalog_loading_error">Impossible de charger le catalogue de tags.</string>
+    <string name="tag_catalog_empty">Aucun tag défini pour le moment.</string>
+    <string name="tag_catalog_saved">Catalogue de tags enregistré.</string>
+    <string name="tag_catalog_save_error">Impossible d\'enregistrer vos modifications.</string>
+    <string name="add_tag">Ajouter un tag</string>
+    <string name="tag_id_label">ID du tag</string>
+    <string name="tag_validation_id_required">Saisissez un identifiant pour ce tag.</string>
+    <string name="tag_validation_id_duplicate">Chaque tag doit avoir un identifiant unique.</string>
+    <string name="tag_color_label">Couleur (facultatif)</string>
+    <string name="tag_labels_title">Libellés localisés</string>
+    <string name="tag_label_locale_hint">Langue (laisser vide pour défaut)</string>
+    <string name="tag_label_value_label">Libellé</string>
+    <string name="tag_validation_locale_duplicate">Cette langue est déjà utilisée.</string>
+    <string name="tag_validation_label_required">Saisissez un libellé.</string>
+    <string name="tag_validation_english_required">Ajoutez un libellé par défaut ou en anglais.</string>
+    <string name="add_label">Ajouter un libellé</string>
+    <string name="delete_label">Supprimer le libellé</string>
+    <string name="delete_tag">Supprimer le tag</string>
 </resources>
