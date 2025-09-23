@@ -616,36 +616,36 @@ class NoteRepository(
                 canonicalIds = emptySet()
                 idLookup = emptyMap()
                 labelLookup = emptyMap()
-                return
-            }
-            val ids = LinkedHashSet<String>()
-            val idsByLower = mutableMapOf<String, String>()
-            val labelsByLower = mutableMapOf<String, String>()
-            catalog.tags.forEach { definition ->
-                val id = definition.id.trim()
-                if (id.isEmpty()) return@forEach
-                val added = ids.add(id)
-                idsByLower.putIfAbsent(id.lowercase(Locale.US), id)
-                if (added) {
-                    val preferred = definition.labelForLocale(locale)
-                        ?: definition.labels.firstOrNull()?.value
-                    preferred?.let { label ->
-                        val normalized = label.trim().lowercase(Locale.US)
+            } else {
+                val ids = LinkedHashSet<String>()
+                val idsByLower = mutableMapOf<String, String>()
+                val labelsByLower = mutableMapOf<String, String>()
+                catalog.tags.forEach { definition ->
+                    val id = definition.id.trim()
+                    if (id.isEmpty()) return@forEach
+                    val added = ids.add(id)
+                    idsByLower.putIfAbsent(id.lowercase(Locale.US), id)
+                    if (added) {
+                        val preferred = definition.labelForLocale(locale)
+                            ?: definition.labels.firstOrNull()?.value
+                        preferred?.let { label ->
+                            val normalized = label.trim().lowercase(Locale.US)
+                            if (normalized.isNotEmpty()) {
+                                labelsByLower.putIfAbsent(normalized, id)
+                            }
+                        }
+                    }
+                    definition.labels.forEach { localized ->
+                        val normalized = localized.value.trim().lowercase(Locale.US)
                         if (normalized.isNotEmpty()) {
                             labelsByLower.putIfAbsent(normalized, id)
                         }
                     }
                 }
-                definition.labels.forEach { localized ->
-                    val normalized = localized.value.trim().lowercase(Locale.US)
-                    if (normalized.isNotEmpty()) {
-                        labelsByLower.putIfAbsent(normalized, id)
-                    }
-                }
+                canonicalIds = ids
+                idLookup = idsByLower
+                labelLookup = labelsByLower
             }
-            canonicalIds = ids
-            idLookup = idsByLower
-            labelLookup = labelsByLower
         }
 
         fun mapLegacy(values: List<String>): TagMigrationResult {

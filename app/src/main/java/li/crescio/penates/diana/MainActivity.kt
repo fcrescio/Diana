@@ -81,6 +81,7 @@ import li.crescio.penates.diana.session.Session
 import li.crescio.penates.diana.session.SessionRepository
 import li.crescio.penates.diana.session.SessionSettings
 import li.crescio.penates.diana.tags.TagCatalogRepository
+import li.crescio.penates.diana.tags.TagCatalogViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -550,6 +551,13 @@ fun DianaApp(
             tagCatalogRepository = tagCatalogRepository,
         )
     }
+    val tagCatalogViewModel = remember(session.id) {
+        TagCatalogViewModel(tagCatalogRepository)
+    }
+    DisposableEffect(tagCatalogViewModel) {
+        onDispose { tagCatalogViewModel.dispose() }
+    }
+    val tagCatalogState by tagCatalogViewModel.uiState.collectAsState()
     LaunchedEffect(session) {
         val sanitized = sanitizeModel(session.settings.model)
         val sanitizedSession = session.copy(settings = session.settings.copy(model = sanitized))
@@ -794,9 +802,17 @@ fun DianaApp(
                         if (it.id == item.id) it.copy(status = newStatus) else it
                     }
                     scope.launch {
-                          val todoNotes = todoItems.map {
-                              StructuredNote.ToDo(it.text, it.status, it.tags, it.dueDate, it.eventDate, id = it.id)
-                          }
+                        val todoNotes = todoItems.map {
+                            StructuredNote.ToDo(
+                                text = it.text,
+                                status = it.status,
+                                tagIds = it.tagIds,
+                                tagLabels = it.tagLabels,
+                                dueDate = it.dueDate,
+                                eventDate = it.eventDate,
+                                id = it.id,
+                            )
+                        }
                         val apptNotes = if (processAppointments) {
                             appointments.map {
                                 StructuredNote.Event(it.text, it.datetime, it.location)
@@ -875,6 +891,7 @@ fun DianaApp(
                     val persisted = persistSettings { it.copy(model = model) }
                     processor.model = persisted.model
                 },
+                onManageTags = { screen = Screen.TagCatalog },
                 onClearTodos = {
                     scope.launch {
                         repository.clearTodos()
@@ -899,6 +916,27 @@ fun DianaApp(
                     }
                 },
                 onBack = { screen = Screen.List },
+                modifier = contentModifier
+            )
+            Screen.TagCatalog -> TagCatalogScreen(
+                state = tagCatalogState,
+                onBack = { screen = Screen.Settings },
+                onRetry = { tagCatalogViewModel.refresh() },
+                onAddTag = { tagCatalogViewModel.addTag() },
+                onDeleteTag = { tagCatalogViewModel.deleteTag(it) },
+                onTagIdChange = { tagKey, value -> tagCatalogViewModel.updateTagId(tagKey, value) },
+                onTagColorChange = { tagKey, value -> tagCatalogViewModel.updateTagColor(tagKey, value) },
+                onAddLabel = { tagCatalogViewModel.addLabel(it) },
+                onDeleteLabel = { tagKey, labelKey ->
+                    tagCatalogViewModel.removeLabel(tagKey, labelKey)
+                },
+                onLabelLocaleChange = { tagKey, labelKey, value ->
+                    tagCatalogViewModel.updateLabelLocale(tagKey, labelKey, value)
+                },
+                onLabelValueChange = { tagKey, labelKey, value ->
+                    tagCatalogViewModel.updateLabelValue(tagKey, labelKey, value)
+                },
+                onSave = { tagCatalogViewModel.save() },
                 modifier = contentModifier
             )
         }
@@ -1225,4 +1263,5 @@ sealed class Screen {
     data object TextMemo : Screen()
     data object Processing : Screen()
     data object Settings : Screen()
+    data object TagCatalog : Screen()
 }

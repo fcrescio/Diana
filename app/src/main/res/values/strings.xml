@@ -69,4 +69,23 @@
     <string name="remote_session_model_default">Default</string>
     <string name="import_session_action">Import</string>
     <string name="close">Close</string>
+    <string name="manage_tags">Manage tags</string>
+    <string name="tag_catalog_loading_error">We couldn\'t load the tag catalog.</string>
+    <string name="tag_catalog_empty">No tags defined yet.</string>
+    <string name="tag_catalog_saved">Tag catalog saved.</string>
+    <string name="tag_catalog_save_error">We couldn\'t save your changes.</string>
+    <string name="add_tag">Add tag</string>
+    <string name="tag_id_label">Tag ID</string>
+    <string name="tag_validation_id_required">Enter an ID for this tag.</string>
+    <string name="tag_validation_id_duplicate">Each tag needs a unique ID.</string>
+    <string name="tag_color_label">Color (optional)</string>
+    <string name="tag_labels_title">Localized labels</string>
+    <string name="tag_label_locale_hint">Locale (leave blank for default)</string>
+    <string name="tag_label_value_label">Label</string>
+    <string name="tag_validation_locale_duplicate">This locale is already used.</string>
+    <string name="tag_validation_label_required">Enter a label.</string>
+    <string name="tag_validation_english_required">Add a default or English label.</string>
+    <string name="add_label">Add label</string>
+    <string name="delete_label">Delete label</string>
+    <string name="delete_tag">Delete tag</string>
 </resources>
