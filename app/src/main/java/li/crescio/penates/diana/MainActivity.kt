@@ -82,6 +82,7 @@ import li.crescio.penates.diana.session.SessionRepository
 import li.crescio.penates.diana.session.SessionSettings
 import li.crescio.penates.diana.tags.TagCatalogRepository
 import li.crescio.penates.diana.tags.TagCatalogViewModel
+import li.crescio.penates.diana.tags.toTagCatalog
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -505,6 +506,7 @@ fun DianaApp(
     val logApiKeyMissing = stringResource(R.string.api_key_missing)
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val locale = Locale.getDefault()
     val modelOptions = remember(context) {
         val resources = context.resources
         val packageName = context.packageName
@@ -546,7 +548,7 @@ fun DianaApp(
         MemoProcessor(
             BuildConfig.OPENROUTER_API_KEY,
             logger,
-            Locale.getDefault(),
+            locale,
             initialModel = sanitizedModel,
             tagCatalogRepository = tagCatalogRepository,
         )
@@ -558,6 +560,7 @@ fun DianaApp(
         onDispose { tagCatalogViewModel.dispose() }
     }
     val tagCatalogState by tagCatalogViewModel.uiState.collectAsState()
+    val currentTagCatalog = remember(tagCatalogState.tags) { tagCatalogState.toTagCatalog() }
     LaunchedEffect(session) {
         val sanitized = sanitizeModel(session.settings.model)
         val sanitizedSession = session.copy(settings = session.settings.copy(model = sanitized))
@@ -567,6 +570,10 @@ fun DianaApp(
         processThoughts = sanitizedSession.settings.processThoughts
         selectedModel = sanitized
         processor.model = sanitized
+    }
+
+    LaunchedEffect(currentTagCatalog) {
+        processor.updateTagCatalog(currentTagCatalog)
     }
 
     fun persistSettings(transform: (SessionSettings) -> SessionSettings): SessionSettings {
@@ -586,8 +593,16 @@ fun DianaApp(
     fun syncProcessor() {
         val thoughtItems = thoughtNotes.map { note ->
             when (note) {
-                is StructuredNote.Memo -> Thought(note.text, note.tagIds, note.tagLabels)
-                is StructuredNote.Free -> Thought(note.text, note.tagIds, note.tagLabels)
+                is StructuredNote.Memo -> Thought(
+                    text = note.text,
+                    tagIds = note.tagIds,
+                    tagLabels = note.resolvedTagLabels(currentTagCatalog, locale),
+                )
+                is StructuredNote.Free -> Thought(
+                    text = note.text,
+                    tagIds = note.tagIds,
+                    tagLabels = note.resolvedTagLabels(currentTagCatalog, locale),
+                )
                 else -> throw IllegalStateException("Unexpected note type")
             }
         }
@@ -791,6 +806,8 @@ fun DianaApp(
                 appointments,
                 thoughtNotes,
                 thoughtDocument,
+                currentTagCatalog,
+                locale,
                 logs,
                 processTodos,
                 processAppointments,

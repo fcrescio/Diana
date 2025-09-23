@@ -14,7 +14,8 @@
 The main source set lives under `app/src/main/java/li/crescio/penates/diana`. Key packages include:
 
 - `llm/` – Integrations for language-model processing, prompt management, resource loading, and structured memo summarization.
-- `notes/` – Domain models describing recordings, transcripts, memos, and other note abstractions shared across features.
+- `notes/` – Domain models describing recordings, transcripts, memos, and other note abstractions shared across features. Structured notes now persist tag identifiers while helper methods resolve localized labels for display.
+- `tags/` – Tag catalog definitions, localization helpers, and editor state used to synchronize identifier/label mappings across processing and UI.
 - `persistence/` – Repository classes that coordinate reads and writes of memos, notes, and session metadata.
 - `player/` – Audio playback interfaces and the Android-specific implementation.
 - `recorder/` – Audio capture interfaces and Android recorder implementation details.

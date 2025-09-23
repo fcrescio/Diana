@@ -288,7 +288,6 @@ class MemoProcessor(
         val itemsArr = JSONArray()
         for (item in sanitizedItems) {
             val itemObj = JSONObject()
-            itemObj.put("id", item.id)
             itemObj.put("text", item.text)
             itemObj.put("status", item.status)
             val tagsArr = JSONArray()

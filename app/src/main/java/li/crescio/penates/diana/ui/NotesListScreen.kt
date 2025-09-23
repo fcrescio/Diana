@@ -28,12 +28,15 @@ import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.notes.ThoughtDocument
 import li.crescio.penates.diana.notes.ThoughtOutlineSection
+import li.crescio.penates.diana.notes.ResolvedTag
+import li.crescio.penates.diana.tags.TagCatalog
 import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.LinkedHashSet
 import java.util.Locale
 
 private fun parseDate(dateString: String): LocalDate? {
@@ -48,6 +51,8 @@ private fun parseDate(dateString: String): LocalDate? {
 private fun ThoughtsSection(
     notes: List<StructuredNote>,
     thoughtDocument: ThoughtDocument?,
+    tagCatalog: TagCatalog?,
+    locale: Locale,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -62,7 +67,9 @@ private fun ThoughtsSection(
                 .padding(bottom = 8.dp)
         )
 
-        val tagIndex = remember(notes) { buildSectionTagIndex(notes) }
+        val tagIndex = remember(notes, tagCatalog, locale) {
+            buildSectionTagIndex(notes, tagCatalog, locale)
+        }
         val outlineItems = remember(thoughtDocument) {
             thoughtDocument?.outline?.sections?.let { flattenOutline(it) } ?: emptyList()
         }
@@ -70,8 +77,10 @@ private fun ThoughtsSection(
         if (thoughtDocument == null || outlineItems.isEmpty()) {
             val filteredNotes = notes.filter { note ->
                 filter.isBlank() || when (note) {
-                    is StructuredNote.Memo -> note.tags.any { it.contains(filter, true) }
-                    is StructuredNote.Free -> note.tags.any { it.contains(filter, true) }
+                    is StructuredNote.Memo -> note.resolvedTags(tagCatalog, locale)
+                        .any { it.label.contains(filter, ignoreCase = true) }
+                    is StructuredNote.Free -> note.resolvedTags(tagCatalog, locale)
+                        .any { it.label.contains(filter, ignoreCase = true) }
                     else -> false
                 }
             }
@@ -90,8 +99,8 @@ private fun ThoughtsSection(
                 Column {
                     filteredNotes.forEach { note ->
                         val (text, tags) = when (note) {
-                            is StructuredNote.Memo -> note.text to note.tags
-                            is StructuredNote.Free -> note.text to note.tags
+                            is StructuredNote.Memo -> note.text to note.resolvedTags(tagCatalog, locale)
+                            is StructuredNote.Free -> note.text to note.resolvedTags(tagCatalog, locale)
                             else -> "" to emptyList()
                         }
                         if (text.isNotBlank()) {
@@ -105,8 +114,8 @@ private fun ThoughtsSection(
                                     ) {
                                         tags.forEach { tag ->
                                             AssistChip(
-                                                onClick = { filter = tag },
-                                                label = { Text(tag) }
+                                                onClick = { filter = tag.label },
+                                                label = { Text(tag.label) }
                                             )
                                         }
                                     }
@@ -122,7 +131,7 @@ private fun ThoughtsSection(
                     text = stringResource(R.string.thoughts_tags_label),
                     style = MaterialTheme.typography.labelLarge,
                 )
-                TagRow(tags = tagIndex.allTags, onTagClick = { filter = it })
+                TagRow(tags = tagIndex.allTags, onTagClick = { filter = it.label })
             }
             return
         }
@@ -131,14 +140,14 @@ private fun ThoughtsSection(
             mutableStateOf(outlineItems.firstOrNull()?.section?.anchor)
         }
 
-        val filteredOutline = remember(filter, outlineItems, tagIndex) {
+        val filteredOutline = remember(filter, outlineItems, tagIndex, locale) {
             if (filter.isBlank()) {
                 outlineItems
             } else {
-                val query = filter.trim().lowercase(Locale.getDefault())
+                val query = filter.trim().lowercase(locale)
                 outlineItems.filter { item ->
                     tagIndex.tagsFor(item.section).any {
-                        it.lowercase(Locale.getDefault()).contains(query)
+                        it.label.lowercase(locale).contains(query)
                     }
                 }
             }
@@ -165,7 +174,7 @@ private fun ThoughtsSection(
                     text = stringResource(R.string.thoughts_tags_label),
                     style = MaterialTheme.typography.labelLarge,
                 )
-                TagRow(tags = tagIndex.allTags, onTagClick = { filter = it })
+            TagRow(tags = tagIndex.allTags, onTagClick = { filter = it.label })
             }
             return
         }
@@ -208,7 +217,7 @@ private fun ThoughtsSection(
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
-            TagRow(tags = tagsToShow, onTagClick = { filter = it })
+            TagRow(tags = tagsToShow, onTagClick = { filter = it.label })
         }
     }
 }
@@ -243,8 +252,8 @@ private fun OutlineList(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TagRow(
-    tags: Set<String>,
-    onTagClick: (String) -> Unit,
+    tags: Set<ResolvedTag>,
+    onTagClick: (ResolvedTag) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     FlowRow(
@@ -252,10 +261,12 @@ private fun TagRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        tags.sortedBy { it.lowercase(Locale.getDefault()) }.forEach { tag ->
+        val comparator = compareBy<ResolvedTag> { it.label.lowercase(Locale.getDefault()) }
+            .thenBy { it.id }
+        tags.sortedWith(comparator).forEach { tag ->
             AssistChip(
                 onClick = { onTagClick(tag) },
-                label = { Text(tag) }
+                label = { Text(tag.label) }
             )
         }
     }
@@ -319,41 +330,45 @@ private fun flattenOutline(
 }
 
 internal data class SectionTagIndex(
-    val anchorTags: Map<String, Set<String>>,
-    val titleTags: Map<String, Set<String>>,
-    val freeTags: Set<String>,
+    val anchorTags: Map<String, Set<ResolvedTag>>,
+    val titleTags: Map<String, Set<ResolvedTag>>,
+    val freeTags: Set<ResolvedTag>,
 ) {
-    val allTags: Set<String> = buildSet {
+    val allTags: Set<ResolvedTag> = buildSet {
         anchorTags.values.forEach { addAll(it) }
         titleTags.values.forEach { addAll(it) }
         addAll(freeTags)
     }
 }
 
-internal fun SectionTagIndex.tagsFor(section: ThoughtOutlineSection): Set<String> {
+internal fun SectionTagIndex.tagsFor(section: ThoughtOutlineSection): Set<ResolvedTag> {
     anchorTags[section.anchor]?.takeIf { it.isNotEmpty() }?.let { return it }
     titleTags[section.title]?.takeIf { it.isNotEmpty() }?.let { return it }
     return emptySet()
 }
 
-internal fun buildSectionTagIndex(notes: List<StructuredNote>): SectionTagIndex {
-    val anchorTags = mutableMapOf<String, MutableSet<String>>()
-    val titleTags = mutableMapOf<String, MutableSet<String>>()
-    val freeTags = mutableSetOf<String>()
+internal fun buildSectionTagIndex(
+    notes: List<StructuredNote>,
+    tagCatalog: TagCatalog? = null,
+    locale: Locale = Locale.getDefault(),
+): SectionTagIndex {
+    val anchorTags = mutableMapOf<String, MutableSet<ResolvedTag>>()
+    val titleTags = mutableMapOf<String, MutableSet<ResolvedTag>>()
+    val freeTags = LinkedHashSet<ResolvedTag>()
     notes.forEach { note ->
         val tags = when (note) {
-            is StructuredNote.Memo -> note.tags
-            is StructuredNote.Free -> note.tags
+            is StructuredNote.Memo -> note.resolvedTags(tagCatalog, locale)
+            is StructuredNote.Free -> note.resolvedTags(tagCatalog, locale)
             else -> emptyList()
         }
         if (tags.isEmpty()) return@forEach
         when (note) {
             is StructuredNote.Memo -> {
                 note.sectionAnchor?.takeUnless { it.isBlank() }?.let { anchor ->
-                    anchorTags.getOrPut(anchor) { mutableSetOf() }.addAll(tags)
+                    anchorTags.getOrPut(anchor) { LinkedHashSet() }.addAll(tags)
                 }
                 note.sectionTitle?.takeUnless { it.isBlank() }?.let { title ->
-                    titleTags.getOrPut(title) { mutableSetOf() }.addAll(tags)
+                    titleTags.getOrPut(title) { LinkedHashSet() }.addAll(tags)
                 }
                 if (note.sectionAnchor.isNullOrBlank() && note.sectionTitle.isNullOrBlank()) {
                     freeTags.addAll(tags)
@@ -391,6 +406,8 @@ fun NotesListScreen(
     appointments: List<Appointment>,
     notes: List<StructuredNote>,
     thoughtDocument: ThoughtDocument?,
+    tagCatalog: TagCatalog? = null,
+    locale: Locale = Locale.getDefault(),
     logs: List<String>,
     showTodos: Boolean,
     showAppointments: Boolean,
@@ -468,13 +485,16 @@ fun NotesListScreen(
                                                 textDecoration = decoration
                                             )
                                         }
+                                        val tags = remember(item, tagCatalog, locale) {
+                                            item.resolvedTags(tagCatalog, locale)
+                                        }
                                         Row {
-                                            item.tags.forEach { tag ->
+                                            tags.forEach { tag ->
                                                 AssistChip(
                                                     onClick = {},
                                                     label = {
                                                         Text(
-                                                            tag,
+                                                            tag.label,
                                                             color = textColor,
                                                             textDecoration = decoration
                                                         )
@@ -614,6 +634,8 @@ fun NotesListScreen(
                     ThoughtsSection(
                         notes = notes,
                         thoughtDocument = thoughtDocument,
+                        tagCatalog = tagCatalog,
+                        locale = locale,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                 }

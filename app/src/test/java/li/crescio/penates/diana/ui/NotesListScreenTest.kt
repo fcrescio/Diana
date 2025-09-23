@@ -32,7 +32,7 @@ class NotesListScreenTest {
         val item = TodoItem(
             text = "Finished task",
             status = "done",
-            tags = listOf("tag"),
+            tagIds = listOf("tag"),
         )
         composeTestRule.setContent {
             NotesListScreen(
