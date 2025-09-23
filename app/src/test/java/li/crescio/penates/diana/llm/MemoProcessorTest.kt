@@ -1,6 +1,10 @@
 package li.crescio.penates.diana.llm
 
+import android.util.Log
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import li.crescio.penates.diana.notes.Memo
@@ -17,8 +21,17 @@ import org.junit.Assert.fail
 import org.junit.Test
 import java.io.IOException
 import java.util.Locale
+import li.crescio.penates.diana.tags.LocalizedLabel
+import li.crescio.penates.diana.tags.TagCatalog
+import li.crescio.penates.diana.tags.TagDefinition
 
 class MemoProcessorTest {
+    private val defaultCatalog = createCatalog(
+        "tag" to "General",
+        "planning" to "Planning",
+        "reflection" to "Reflection",
+    )
+
     @Test
     fun process_updatesSummaries_andLogs() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
@@ -84,7 +97,8 @@ class MemoProcessorTest {
             logger = logger,
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
-            client = OkHttpClient()
+            client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         val summary = processor.process(Memo("sample"))
@@ -134,6 +148,7 @@ class MemoProcessorTest {
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
             client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         val initial = MemoSummary(
@@ -199,6 +214,7 @@ class MemoProcessorTest {
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
             client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         processor.process(Memo("first"), processAppointments = false, processThoughts = false)
@@ -245,6 +261,7 @@ class MemoProcessorTest {
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
             client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         val tricky = "first \"quoted\" \\slash"
@@ -279,8 +296,99 @@ class MemoProcessorTest {
             put("items", itemsArr)
         }.toString()
         assertTrue(content.contains(expectedPrior))
+        assertTrue(content.contains("- tag: General"))
+        assertTrue(content.contains("- planning: Planning"))
+        val schemaObj = obj
+            .getJSONObject("response_format")
+            .getJSONObject("json_schema")
+        val enumValues = schemaObj
+            .getJSONObject("schema")
+            .getJSONObject("properties")
+            .getJSONObject("items")
+            .getJSONObject("items")
+            .getJSONObject("properties")
+            .getJSONObject("tags")
+            .getJSONObject("items")
+            .getJSONArray("enum")
+        val values = (0 until enumValues.length()).map { enumValues.getString(it) }
+        assertEquals(listOf("tag", "planning", "reflection"), values)
 
         server.shutdown()
+    }
+
+    @Test
+    fun process_dropsUnknownTags_andLogsFallback() = runBlocking {
+        System.setProperty("net.bytebuddy.experimental", "true")
+
+        mockkStatic(Log::class)
+        every { Log.w(any(), any<String>()) } returns 0
+        every { Log.w(any(), any<String>(), any()) } returns 0
+
+        val server = MockWebServer()
+        try {
+            val todoItem = JSONObject()
+                .put("op", "add")
+                .put("text", "Unknown tag task")
+                .put("status", "not_started")
+                .put("tags", JSONArray().put("mystery"))
+            val todoContent = JSONObject()
+                .put("date", "2024-01-02")
+                .put("items", JSONArray().put(todoItem))
+            val todoResponse = JSONObject()
+                .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", todoContent.toString()))))
+
+            val thoughtPayload = JSONObject()
+                .put("updated_markdown", "## Notes\n- item")
+                .put("sections", JSONArray())
+                .put(
+                    "items",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("text", "Consider the idea")
+                            .put("tags", JSONArray().put("mystery"))
+                    ),
+                )
+            val thoughtResponse = JSONObject()
+                .put(
+                    "choices",
+                    JSONArray().put(
+                        JSONObject().put(
+                            "message",
+                            JSONObject().put("content", thoughtPayload.toString()),
+                        ),
+                    ),
+                )
+
+            server.enqueue(MockResponse().setBody(todoResponse.toString()).setResponseCode(200))
+            server.enqueue(MockResponse().setBody(thoughtResponse.toString()).setResponseCode(200))
+            server.start()
+
+            val processor = MemoProcessor(
+                apiKey = "key",
+                logger = mockk(relaxed = true),
+                locale = Locale.ENGLISH,
+                baseUrl = server.url("/").toString(),
+                client = OkHttpClient(),
+                initialTagCatalog = createCatalog("tag" to "General"),
+            )
+
+            val summary = processor.process(
+                Memo("unknown tags"),
+                processAppointments = false,
+            )
+
+            assertEquals(listOf("tag"), summary.todoItems.first().tags)
+            assertEquals(listOf("tag"), summary.thoughtItems.first().tags)
+            verify(atLeast = 2) {
+                Log.w("MemoProcessor", match { it.contains("Dropping disallowed tags") })
+            }
+            verify(atLeast = 2) {
+                Log.w("MemoProcessor", match { it.contains("Mapping disallowed tags") })
+            }
+        } finally {
+            server.shutdown()
+            unmockkStatic(Log::class)
+        }
     }
 
     @Test
@@ -320,6 +428,7 @@ class MemoProcessorTest {
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
             client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         val summary = processor.process(
@@ -352,7 +461,8 @@ class MemoProcessorTest {
             logger = mockk(relaxed = true),
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
-            client = OkHttpClient()
+            client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         try {
@@ -385,7 +495,8 @@ class MemoProcessorTest {
             logger = mockk(relaxed = true),
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
-            client = OkHttpClient()
+            client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         try {
@@ -417,7 +528,8 @@ class MemoProcessorTest {
             logger = mockk(relaxed = true),
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
-            client = OkHttpClient()
+            client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         try {
@@ -449,7 +561,8 @@ class MemoProcessorTest {
             logger = mockk(relaxed = true),
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
-            client = OkHttpClient()
+            client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         try {
@@ -504,6 +617,7 @@ class MemoProcessorTest {
             locale = Locale.ENGLISH,
             baseUrl = server.url("/").toString(),
             client = OkHttpClient(),
+            initialTagCatalog = defaultCatalog,
         )
 
         val summary = processor.process(
@@ -517,5 +631,13 @@ class MemoProcessorTest {
         assertEquals("summary", outline.first().anchor)
 
         server.shutdown()
+    }
+
+    private fun createCatalog(vararg entries: Pair<String, String>): TagCatalog {
+        if (entries.isEmpty()) return TagCatalog(emptyList())
+        val tags = entries.map { (id, label) ->
+            TagDefinition(id, listOf(LocalizedLabel.create(null, label)))
+        }
+        return TagCatalog(tags)
     }
 }

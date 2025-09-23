@@ -539,7 +539,8 @@ fun DianaApp(
             BuildConfig.OPENROUTER_API_KEY,
             logger,
             Locale.getDefault(),
-            initialModel = sanitizedModel
+            initialModel = sanitizedModel,
+            tagCatalogRepository = tagCatalogRepository,
         )
     }
     LaunchedEffect(session) {

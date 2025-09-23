@@ -17,12 +17,15 @@ import com.fasterxml.jackson.core.io.JsonStringEncoder
 import java.io.IOException
 import java.util.Locale
 import java.time.LocalDate
+import java.util.LinkedHashSet
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayDeque
 import android.util.Log
 import li.crescio.penates.diana.notes.ThoughtDocument
 import li.crescio.penates.diana.notes.ThoughtOutline
 import li.crescio.penates.diana.notes.ThoughtOutlineSection
+import li.crescio.penates.diana.tags.TagCatalog
+import li.crescio.penates.diana.tags.TagCatalogRepository
 
 private fun loadResource(path: String): String = LlmResources.load(path)
 
@@ -33,17 +36,20 @@ private fun loadResource(path: String): String = LlmResources.load(path)
 class MemoProcessor(
     private val apiKey: String,
     private val logger: LlmLogger,
-    locale: Locale,
+    private val locale: Locale,
     initialModel: String = DEFAULT_MODEL,
     private val baseUrl: String = loadResource("llm/base_url.txt").trim(),
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
+        .build(),
+    private val tagCatalogRepository: TagCatalogRepository? = null,
+    initialTagCatalog: TagCatalog? = null,
 ) {
 
     companion object {
+        private const val TAG = "MemoProcessor"
         const val DEFAULT_MODEL = "mistralai/mistral-nemo"
     }
 
@@ -55,7 +61,13 @@ class MemoProcessor(
     private var thoughtItems: List<Thought> = emptyList()
     private var thoughtDocument: ThoughtDocument? = null
 
+    private var tagCatalogSnapshot: TagCatalogSnapshot = TagCatalogSnapshot.EMPTY
+
     private val prompts = Prompts.forLocale(locale)
+
+    init {
+        applyTagCatalog(initialTagCatalog)
+    }
 
     var model: String = normalizeModel(initialModel)
         set(value) {
@@ -81,14 +93,135 @@ class MemoProcessor(
     private val appointmentSchema = loadResource("llm/schema/appointment.json")
     private val thoughtSchema = loadResource("llm/schema/thought.json")
 
+    private fun applyTagCatalog(catalog: TagCatalog?) {
+        tagCatalogSnapshot = TagCatalogSnapshot.fromCatalog(catalog, locale)
+        todoItems = sanitizeTodoItems(todoItems)
+        thoughtItems = sanitizeThoughtItems(thoughtItems)
+    }
+
+    suspend fun refreshTagCatalog() {
+        if (tagCatalogRepository == null) return
+        try {
+            val catalog = tagCatalogRepository.loadCatalog()
+            applyTagCatalog(catalog)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to refresh tag catalog", e)
+        }
+    }
+
+    fun updateTagCatalog(catalog: TagCatalog?) {
+        applyTagCatalog(catalog)
+    }
+
+    private suspend fun ensureTagCatalogLoaded() {
+        if (tagCatalogSnapshot.isInitialized || tagCatalogRepository == null) {
+            return
+        }
+        try {
+            val catalog = tagCatalogRepository.loadCatalog()
+            applyTagCatalog(catalog)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load tag catalog", e)
+        }
+    }
+
+    private fun sanitizeTodoItems(items: List<TodoItem>): List<TodoItem> {
+        return items.map { item ->
+            val sanitizedTags = sanitizeTags(item.tags, "existing todo '${item.text}'")
+            if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+        }
+    }
+
+    private fun sanitizeThoughtItems(items: List<Thought>): List<Thought> {
+        return items.map { item ->
+            val sanitizedTags = sanitizeTags(item.tags, "existing thought '${item.text}'")
+            if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+        }
+    }
+
+    private fun sanitizeTodoItem(item: TodoItem, context: String): TodoItem {
+        val sanitizedTags = sanitizeTags(item.tags, context)
+        return if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+    }
+
+    private fun sanitizeThoughtItem(item: Thought, context: String): Thought {
+        val sanitizedTags = sanitizeTags(item.tags, context)
+        return if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+    }
+
+    private fun sanitizeTags(tags: List<String>, context: String): List<String> {
+        if (tags.isEmpty()) return tags
+        val normalized = LinkedHashSet<String>()
+        tags.forEach { tag ->
+            val trimmed = tag.trim()
+            if (trimmed.isNotEmpty()) {
+                normalized.add(trimmed)
+            }
+        }
+        if (normalized.isEmpty()) {
+            return emptyList()
+        }
+        val approved = tagCatalogSnapshot.approvedIds
+        if (approved.isEmpty()) {
+            return normalized.toList()
+        }
+        val allowed = normalized.filter { approved.contains(it) }
+        if (allowed.size == normalized.size) {
+            return allowed
+        }
+        val removed = normalized.filterNot { approved.contains(it) }
+        if (removed.isNotEmpty()) {
+            Log.w(TAG, "Dropping disallowed tags for $context: ${removed.joinToString(", ")}")
+        }
+        if (allowed.isNotEmpty()) {
+            return allowed
+        }
+        val fallback = tagCatalogSnapshot.primaryTagId
+        return if (fallback != null) {
+            Log.w(TAG, "Mapping disallowed tags for $context to fallback '$fallback'")
+            listOf(fallback)
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun applyTagEnumeration(aspect: String, schemaObject: JSONObject) {
+        if (aspect != prompts.todo && aspect != prompts.thoughts) {
+            return
+        }
+        applyTagEnumerationAtPath(
+            schemaObject,
+            listOf("properties", "items", "items", "properties", "tags", "items"),
+        )
+    }
+
+    private fun applyTagEnumerationAtPath(schemaObject: JSONObject, path: List<String>) {
+        var cursor: JSONObject? = schemaObject.optJSONObject("schema") ?: schemaObject
+        for (segment in path.dropLast(1)) {
+            cursor = cursor?.optJSONObject(segment) ?: return
+        }
+        val target = cursor?.optJSONObject(path.last()) ?: return
+        target.remove("pattern")
+        val descriptors = tagCatalogSnapshot.descriptors
+        if (descriptors.isEmpty()) {
+            target.remove("enum")
+            return
+        }
+        val enumValues = JSONArray()
+        descriptors.forEach { descriptor ->
+            enumValues.put(descriptor.id)
+        }
+        target.put("enum", enumValues)
+    }
+
     /** Seed the processor with an existing summary. */
     fun initialize(summary: MemoSummary) {
         todo = summary.todo
-        todoItems = summary.todoItems
+        todoItems = sanitizeTodoItems(summary.todoItems)
         appointments = summary.appointments
         appointmentItems = summary.appointmentItems
         thoughts = summary.thoughtDocument?.markdownBody ?: summary.thoughts
-        thoughtItems = summary.thoughtItems
+        thoughtItems = sanitizeThoughtItems(summary.thoughtItems)
         thoughtDocument = summary.thoughtDocument
     }
 
@@ -101,6 +234,7 @@ class MemoProcessor(
         processAppointments: Boolean = true,
         processThoughts: Boolean = true,
     ): MemoSummary {
+        ensureTagCatalogLoaded()
         if (processTodos) {
             todo = updateBuffer(prompts.todo, todoPriorJson(), memo.text)
         }
@@ -122,9 +256,13 @@ class MemoProcessor(
     }
 
     private fun todoPriorJson(): String {
+        val sanitizedItems = sanitizeTodoItems(todoItems)
+        if (sanitizedItems != todoItems) {
+            todoItems = sanitizedItems
+        }
         val obj = JSONObject()
         val itemsArr = JSONArray()
-        for (item in todoItems) {
+        for (item in sanitizedItems) {
             val itemObj = JSONObject()
             itemObj.put("id", item.id)
             itemObj.put("text", item.text)
@@ -157,6 +295,10 @@ class MemoProcessor(
     }
 
     private fun thoughtPriorJson(): String {
+        val sanitizedItems = sanitizeThoughtItems(thoughtItems)
+        if (sanitizedItems != thoughtItems) {
+            thoughtItems = sanitizedItems
+        }
         val obj = JSONObject()
         obj.put("markdown_body", thoughtDocument?.markdownBody ?: thoughts)
         val outlineSections = thoughtDocument?.outline?.sections ?: emptyList()
@@ -164,7 +306,7 @@ class MemoProcessor(
             outlineSections.forEach { put(outlineSectionToJson(it)) }
         })
         val itemsArr = JSONArray()
-        for (item in thoughtItems) {
+        for (item in sanitizedItems) {
             val itemObj = JSONObject()
             itemObj.put("text", item.text)
             val tagsArr = JSONArray()
@@ -226,27 +368,30 @@ class MemoProcessor(
     }
 
     private suspend fun updateBuffer(aspect: String, priorJson: String, memo: String): String {
-        val schema = when (aspect) {
+        val schemaTemplate = when (aspect) {
             prompts.todo -> todoSchema
             prompts.appointments -> appointmentSchema
             prompts.thoughts -> thoughtSchema
             else -> baseSchema
         }
+        val schemaObject = try {
+            JSONObject(schemaTemplate)
+        } catch (e: Exception) {
+            throw IOException("Invalid JSON schema", e)
+        }
+        applyTagEnumeration(aspect, schemaObject)
+        val schemaString = schemaObject.toString()
         val system = prompts.systemTemplate.replace("{aspect}", aspect)
         val user = prompts.userTemplate
             .replace("{aspect}", aspect)
             .replace("{prior}", priorJson)
             .replace("{memo}", memo)
             .replace("{today}", LocalDate.now().toString())
-        val json = buildRequest(system, user, schema)
+            .replace("{tag_catalog}", tagCatalogSnapshot.promptText)
+        val json = buildRequest(system, user, schemaString)
 
         if (apiKey.isBlank()) throw IOException("Missing API key")
         check(json.contains("\"model\"")) { "Invalid model" }
-        val schemaObject = try {
-            JSONObject(schema)
-        } catch (e: Exception) {
-            throw IOException("Invalid JSON schema", e)
-        }
         val innerSchema = schemaObject.optJSONObject("schema") ?: schemaObject
         val required = innerSchema.optJSONArray("required")
         if (aspect == prompts.todo) {
@@ -323,54 +468,78 @@ class MemoProcessor(
     val start = rawContent.indexOf('{')
     val end = rawContent.lastIndexOf('}')
     if (start == -1 || end == -1 || end <= start) throw IOException("No JSON found")
-    return try {
-        val obj = JSONObject(rawContent.substring(start, end + 1))
-        val itemsArr = obj.optJSONArray("items")
-        when (aspect) {
-            prompts.todo -> {
-                val updates = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                    val op = itemObj.optString("op")
-                    val text = itemObj.optString("text")
-                    val status = itemObj.optString("status")
-                    val tagsArr = itemObj.optJSONArray("tags")
-                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                    val dueDate = itemObj.optString("due_date", "")
-                    val eventDate = itemObj.optString("event_date", "")
-                    val id = itemObj.optString("id", "")
-                    if (text.isBlank()) null else op to TodoItem(text, status, tags, dueDate, eventDate, id)
-                }
-                val merged = todoItems.associateBy { it.id.ifBlank { it.text } }.toMutableMap()
-                for ((op, item) in updates) {
-                    when (op) {
-                        "add", "update" -> merged[item.id.ifBlank { item.text }] = item
+        return try {
+            val obj = JSONObject(rawContent.substring(start, end + 1))
+            val itemsArr = obj.optJSONArray("items")
+            when (aspect) {
+                prompts.todo -> {
+                    val updates = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                        val op = itemObj.optString("op")
+                        val text = itemObj.optString("text")
+                        val status = itemObj.optString("status")
+                        val tagsArr = itemObj.optJSONArray("tags")
+                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                        val dueDate = itemObj.optString("due_date", "")
+                        val eventDate = itemObj.optString("event_date", "")
+                        val id = itemObj.optString("id", "")
+                        if (text.isBlank()) {
+                            null
+                        } else {
+                            val context = if (id.isNotBlank()) {
+                                "todo item '$text' (id=$id)"
+                            } else {
+                                "todo item '$text'"
+                            }
+                            val sanitized = sanitizeTodoItem(
+                                TodoItem(text, status, tags, dueDate, eventDate, id),
+                                context,
+                            )
+                            op to sanitized
+                        }
                     }
+                    val existing = sanitizeTodoItems(todoItems)
+                    if (existing != todoItems) {
+                        todoItems = existing
+                    }
+                    val merged = todoItems.associateBy { it.id.ifBlank { it.text } }.toMutableMap()
+                    for ((op, item) in updates) {
+                        when (op) {
+                            "add", "update" -> merged[item.id.ifBlank { item.text }] = item
+                        }
+                    }
+                    todoItems = sanitizeTodoItems(merged.values.toList())
+                    todoItems.joinToString("\n") { it.text }
                 }
-                todoItems = merged.values.toList()
-                todoItems.joinToString("\n") { it.text }
-            }
-            prompts.appointments -> {
-                appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                prompts.appointments -> {
+                    appointmentItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
                     val text = itemObj.optString("text")
                     val datetime = itemObj.optString("datetime")
                     val location = itemObj.optString("location")
                     if (text.isBlank()) null else Appointment(text, datetime, location)
                 }
                 obj.optString("updated", appointments)
-            }
-            prompts.thoughts -> {
-                thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                    val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                    val text = itemObj.optString("text")
-                    val tagsArr = itemObj.optJSONArray("tags")
-                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                    if (text.isBlank()) null else Thought(text, tags)
                 }
-                val updatedMarkdown = obj.optString("updated_markdown", thoughts)
-                val sections = parseOutlineSections(obj.optJSONArray("sections"))
-                thoughtDocument = ThoughtDocument(updatedMarkdown, ThoughtOutline(sections))
-                updatedMarkdown
+                prompts.thoughts -> {
+                    thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
+                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
+                        val text = itemObj.optString("text")
+                        val tagsArr = itemObj.optJSONArray("tags")
+                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                        if (text.isBlank()) {
+                            null
+                        } else {
+                            sanitizeThoughtItem(
+                                Thought(text, tags),
+                                "thought item '$text'",
+                            )
+                        }
+                    }
+                    val updatedMarkdown = obj.optString("updated_markdown", thoughts)
+                    val sections = parseOutlineSections(obj.optJSONArray("sections"))
+                    thoughtDocument = ThoughtDocument(updatedMarkdown, ThoughtOutline(sections))
+                    updatedMarkdown
             }
             else -> obj.optString("updated", "")
         }
@@ -378,6 +547,62 @@ class MemoProcessor(
         throw IOException("Invalid JSON", e)
     }
 }
+
+    private data class TagCatalogSnapshot(
+        val descriptors: List<TagDescriptor>,
+        val approvedIds: Set<String>,
+        val promptText: String,
+        val primaryTagId: String?,
+    ) {
+        val isInitialized: Boolean get() = descriptors.isNotEmpty()
+
+        companion object {
+            val EMPTY = TagCatalogSnapshot(
+                descriptors = emptyList(),
+                approvedIds = emptySet(),
+                promptText = "- (no tags available)",
+                primaryTagId = null,
+            )
+
+            fun fromCatalog(catalog: TagCatalog?, locale: Locale): TagCatalogSnapshot {
+                if (catalog == null || catalog.tags.isEmpty()) {
+                    return EMPTY
+                }
+                val descriptors = catalog.tags.mapNotNull { definition ->
+                    val id = definition.id.trim()
+                    if (id.isEmpty()) {
+                        return@mapNotNull null
+                    }
+                    val label = definition.labelForLocale(locale)
+                        ?: definition.labels.firstOrNull()?.value
+                        ?: id
+                    TagDescriptor(id, label)
+                }
+                    .distinctBy { it.id }
+                    .sortedWith(
+                        compareBy(String.CASE_INSENSITIVE_ORDER) { it.label }
+                            .thenBy { it.id },
+                    )
+                if (descriptors.isEmpty()) {
+                    return EMPTY
+                }
+                val approved = LinkedHashSet<String>()
+                descriptors.forEach { descriptor -> approved.add(descriptor.id) }
+                val prompt = descriptors.joinToString(separator = "\n") { "- ${it.id}: ${it.label}" }
+                return TagCatalogSnapshot(
+                    descriptors = descriptors,
+                    approvedIds = approved,
+                    promptText = prompt,
+                    primaryTagId = descriptors.firstOrNull()?.id,
+                )
+            }
+        }
+    }
+
+    private data class TagDescriptor(
+        val id: String,
+        val label: String,
+    )
 }
 
 data class TodoItem(
