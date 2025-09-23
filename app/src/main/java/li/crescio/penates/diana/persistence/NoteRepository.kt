@@ -1,5 +1,6 @@
 package li.crescio.penates.diana.persistence
 
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.MemoSummary
@@ -8,9 +9,13 @@ import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.notes.ThoughtDocument
 import li.crescio.penates.diana.notes.ThoughtOutline
 import li.crescio.penates.diana.notes.ThoughtOutlineSection
+import li.crescio.penates.diana.tags.TagCatalog
+import li.crescio.penates.diana.tags.TagCatalogRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.LinkedHashSet
+import java.util.Locale
 
 class NoteRepository(
     private val firestore: FirebaseFirestore,
@@ -18,6 +23,7 @@ class NoteRepository(
     private val notesFile: File,
     private val thoughtMarkdownFile: File = defaultThoughtMarkdownFile(notesFile),
     private val thoughtOutlineFile: File = defaultThoughtOutlineFile(notesFile),
+    private val tagCatalogRepository: TagCatalogRepository? = null,
 ) {
     companion object {
         private const val THOUGHT_DOCUMENT_TYPE = "thought_document"
@@ -68,45 +74,29 @@ class NoteRepository(
         }
         val updatedTodos = if (saveTodos) {
             savedNotes.filterIsInstance<StructuredNote.ToDo>().map {
-                TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate, it.id)
+                TodoItem(
+                    text = it.text,
+                    status = it.status,
+                    tagIds = it.tagIds,
+                    tagLabels = it.tagLabels,
+                    dueDate = it.dueDate,
+                    eventDate = it.eventDate,
+                    id = it.id,
+                )
             }
         } else summary.todoItems
         return summary.copy(todoItems = updatedTodos)
     }
 
     suspend fun loadNotes(): List<StructuredNote> {
+        val tagContext = loadTagContext()
         val local = if (notesFile.exists()) {
-            notesFile.readLines().mapNotNull { parse(it) }
+            notesFile.readLines().mapNotNull { parse(it, tagContext) }
         } else emptyList()
 
         val remote = try {
             notesCollection().get().await().documents.mapNotNull { doc ->
-                val type = doc.getString("type")
-                val text = doc.getString("text")
-                val datetime = doc.getString("datetime") ?: ""
-                val location = doc.getString("location") ?: ""
-                val createdAt = doc.getLong("createdAt") ?: 0L
-                when (type) {
-                    "todo" -> text?.let {
-                        val status = doc.getString("status") ?: ""
-                        val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                        val dueDate = doc.getString("dueDate") ?: ""
-                        val eventDate = doc.getString("eventDate") ?: ""
-                        StructuredNote.ToDo(it, status, tags, dueDate, eventDate, createdAt, doc.id)
-                    }
-                    "memo" -> text?.let {
-                        val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                        val sectionAnchor = doc.getString("sectionAnchor")?.takeUnless { it.isBlank() }
-                        val sectionTitle = doc.getString("sectionTitle")?.takeUnless { it.isBlank() }
-                        StructuredNote.Memo(it, tags, sectionAnchor, sectionTitle, createdAt)
-                    }
-                    "event" -> text?.let { StructuredNote.Event(it, datetime, location, createdAt) }
-                    "free" -> text?.let {
-                        val tags = (doc.get("tags") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                        StructuredNote.Free(it, tags, createdAt)
-                    }
-                    else -> null
-                }
+                parseRemoteDocument(doc, tagContext)
             }
         } catch (_: Exception) {
             emptyList()
@@ -370,19 +360,23 @@ class NoteRepository(
             put("type", "todo")
             put("text", note.text)
             put("status", note.status)
-            put("tags", note.tags)
+            put("tagIds", note.tagIds)
+            if (note.tagLabels.isNotEmpty()) put("tagLabels", note.tagLabels)
+            put("tags", note.tagIds)
             put("datetime", "")
             put("location", "")
             put("createdAt", note.createdAt)
             put("id", note.id)
-            note.dueDate?.let { put("dueDate", it) }
-            note.eventDate?.let { put("eventDate", it) }
+            if (note.dueDate.isNotBlank()) put("dueDate", note.dueDate)
+            if (note.eventDate.isNotBlank()) put("eventDate", note.eventDate)
         }
 
         is StructuredNote.Memo -> buildMap<String, Any> {
             put("type", "memo")
             put("text", note.text)
-            put("tags", note.tags)
+            put("tagIds", note.tagIds)
+            if (note.tagLabels.isNotEmpty()) put("tagLabels", note.tagLabels)
+            put("tags", note.tagIds)
             put("datetime", "")
             put("location", "")
             put("createdAt", note.createdAt)
@@ -401,14 +395,16 @@ class NoteRepository(
         is StructuredNote.Free -> buildMap<String, Any> {
             put("type", "free")
             put("text", note.text)
-            put("tags", note.tags)
+            put("tagIds", note.tagIds)
+            if (note.tagLabels.isNotEmpty()) put("tagLabels", note.tagLabels)
+            put("tags", note.tagIds)
             put("datetime", "")
             put("location", "")
             put("createdAt", note.createdAt)
         }
     }
 
-    private fun parse(line: String): StructuredNote? {
+    private fun parse(line: String, tagContext: TagMappingContext = TagMappingContext.EMPTY): StructuredNote? {
         return try {
             val obj = JSONObject(line)
             val type = obj.getString("type")
@@ -416,33 +412,268 @@ class NoteRepository(
             val datetime = obj.optString("datetime", "")
             val location = obj.optString("location", "")
             val createdAt = obj.optLong("createdAt", 0L)
+            val tagData = resolveTagData(
+                obj.optJSONArray("tagIds").toStringList(),
+                obj.optJSONArray("tagLabels").toStringList(),
+                obj.optJSONArray("tags").toStringList(),
+                tagContext,
+            )
             when (type) {
                 "todo" -> {
                     val status = obj.optString("status", "")
-                    val tagsArr = obj.optJSONArray("tags")
-                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     val dueDate = obj.optString("dueDate", "")
                     val eventDate = obj.optString("eventDate", "")
                     val id = obj.optString("id", "")
-                    StructuredNote.ToDo(text, status, tags, dueDate, eventDate, createdAt, id)
+                    StructuredNote.ToDo(
+                        text = text,
+                        status = status,
+                        tagIds = tagData.tagIds,
+                        tagLabels = tagData.tagLabels,
+                        dueDate = dueDate,
+                        eventDate = eventDate,
+                        createdAt = createdAt,
+                        id = id,
+                    )
                 }
                 "memo" -> {
-                    val tagsArr = obj.optJSONArray("tags")
-                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
                     val sectionAnchor = obj.optString("sectionAnchor", "").takeUnless { it.isBlank() }
                     val sectionTitle = obj.optString("sectionTitle", "").takeUnless { it.isBlank() }
-                    StructuredNote.Memo(text, tags, sectionAnchor, sectionTitle, createdAt)
+                    StructuredNote.Memo(
+                        text = text,
+                        tagIds = tagData.tagIds,
+                        tagLabels = tagData.tagLabels,
+                        sectionAnchor = sectionAnchor,
+                        sectionTitle = sectionTitle,
+                        createdAt = createdAt,
+                    )
                 }
                 "event" -> StructuredNote.Event(text, datetime, location, createdAt)
-                "free" -> {
-                    val tagsArr = obj.optJSONArray("tags")
-                    val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
-                    StructuredNote.Free(text, tags, createdAt)
-                }
+                "free" -> StructuredNote.Free(
+                    text = text,
+                    tagIds = tagData.tagIds,
+                    tagLabels = tagData.tagLabels,
+                    createdAt = createdAt,
+                )
                 else -> null
             }
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private suspend fun loadTagContext(): TagMappingContext {
+        val catalog = if (tagCatalogRepository == null) {
+            null
+        } else {
+            try {
+                tagCatalogRepository.loadCatalog()
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return TagMappingContext(catalog, Locale.getDefault())
+    }
+
+    private fun parseRemoteDocument(
+        doc: DocumentSnapshot,
+        tagContext: TagMappingContext,
+    ): StructuredNote? {
+        val type = doc.getString("type") ?: return null
+        val text = doc.getString("text")
+        val datetime = doc.getString("datetime") ?: ""
+        val location = doc.getString("location") ?: ""
+        val createdAt = doc.getLong("createdAt") ?: 0L
+        val tagData = resolveTagData(
+            (doc.get("tagIds") as? List<*>)?.toStringList().orEmpty(),
+            (doc.get("tagLabels") as? List<*>)?.toStringList().orEmpty(),
+            (doc.get("tags") as? List<*>)?.toStringList().orEmpty(),
+            tagContext,
+        )
+        return when (type) {
+            "todo" -> text?.let {
+                val status = doc.getString("status") ?: ""
+                val dueDate = doc.getString("dueDate") ?: ""
+                val eventDate = doc.getString("eventDate") ?: ""
+                StructuredNote.ToDo(
+                    text = it,
+                    status = status,
+                    tagIds = tagData.tagIds,
+                    tagLabels = tagData.tagLabels,
+                    dueDate = dueDate,
+                    eventDate = eventDate,
+                    createdAt = createdAt,
+                    id = doc.id,
+                )
+            }
+            "memo" -> text?.let {
+                val sectionAnchor = doc.getString("sectionAnchor")?.takeUnless { anchor -> anchor.isBlank() }
+                val sectionTitle = doc.getString("sectionTitle")?.takeUnless { title -> title.isBlank() }
+                StructuredNote.Memo(
+                    text = it,
+                    tagIds = tagData.tagIds,
+                    tagLabels = tagData.tagLabels,
+                    sectionAnchor = sectionAnchor,
+                    sectionTitle = sectionTitle,
+                    createdAt = createdAt,
+                )
+            }
+            "event" -> text?.let { StructuredNote.Event(it, datetime, location, createdAt) }
+            "free" -> text?.let {
+                StructuredNote.Free(
+                    text = it,
+                    tagIds = tagData.tagIds,
+                    tagLabels = tagData.tagLabels,
+                    createdAt = createdAt,
+                )
+            }
+            else -> null
+        }
+    }
+
+    private fun resolveTagData(
+        explicitIds: List<String>,
+        explicitLabels: List<String>,
+        legacyTags: List<String>,
+        tagContext: TagMappingContext,
+    ): TagData {
+        var ids = sanitizeStrings(explicitIds)
+        val labels = LinkedHashSet<String>()
+        sanitizeStrings(explicitLabels).forEach { labels.add(it) }
+        val legacy = sanitizeStrings(legacyTags)
+        if (ids.isEmpty() && legacy.isNotEmpty()) {
+            val migrated = tagContext.mapLegacy(legacy)
+            ids = migrated.tagIds
+            migrated.unresolvedLabels.forEach { labels.add(it) }
+        } else if (legacy.isNotEmpty()) {
+            val migrated = tagContext.mapLegacy(legacy)
+            migrated.tagIds.forEach { id ->
+                if (ids.none { existing -> existing == id }) {
+                    ids = ids + id
+                }
+            }
+            migrated.unresolvedLabels.forEach { labels.add(it) }
+        }
+        return TagData(ids, labels.toList())
+    }
+
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        val values = mutableListOf<String>()
+        for (idx in 0 until length()) {
+            val value = optString(idx)
+            val trimmed = value.trim()
+            if (trimmed.isNotEmpty()) {
+                values.add(trimmed)
+            }
+        }
+        return sanitizeStrings(values)
+    }
+
+    private fun List<*>?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        val values = mutableListOf<String>()
+        for (element in this) {
+            val value = (element as? String)?.trim()
+            if (!value.isNullOrEmpty()) {
+                values.add(value)
+            }
+        }
+        return sanitizeStrings(values)
+    }
+
+    private fun sanitizeStrings(values: List<String>): List<String> {
+        if (values.isEmpty()) return emptyList()
+        val normalized = LinkedHashSet<String>()
+        values.forEach { value ->
+            val trimmed = value.trim()
+            if (trimmed.isNotEmpty()) {
+                normalized.add(trimmed)
+            }
+        }
+        return normalized.toList()
+    }
+
+    private data class TagData(
+        val tagIds: List<String>,
+        val tagLabels: List<String>,
+    )
+
+    private data class TagMigrationResult(
+        val tagIds: List<String>,
+        val unresolvedLabels: List<String>,
+    )
+
+    private class TagMappingContext(
+        catalog: TagCatalog?,
+        private val locale: Locale,
+    ) {
+        private val canonicalIds: Set<String>
+        private val idLookup: Map<String, String>
+        private val labelLookup: Map<String, String>
+
+        init {
+            if (catalog == null) {
+                canonicalIds = emptySet()
+                idLookup = emptyMap()
+                labelLookup = emptyMap()
+                return
+            }
+            val ids = LinkedHashSet<String>()
+            val idsByLower = mutableMapOf<String, String>()
+            val labelsByLower = mutableMapOf<String, String>()
+            catalog.tags.forEach { definition ->
+                val id = definition.id.trim()
+                if (id.isEmpty()) return@forEach
+                val added = ids.add(id)
+                idsByLower.putIfAbsent(id.lowercase(Locale.US), id)
+                if (added) {
+                    val preferred = definition.labelForLocale(locale)
+                        ?: definition.labels.firstOrNull()?.value
+                    preferred?.let { label ->
+                        val normalized = label.trim().lowercase(Locale.US)
+                        if (normalized.isNotEmpty()) {
+                            labelsByLower.putIfAbsent(normalized, id)
+                        }
+                    }
+                }
+                definition.labels.forEach { localized ->
+                    val normalized = localized.value.trim().lowercase(Locale.US)
+                    if (normalized.isNotEmpty()) {
+                        labelsByLower.putIfAbsent(normalized, id)
+                    }
+                }
+            }
+            canonicalIds = ids
+            idLookup = idsByLower
+            labelLookup = labelsByLower
+        }
+
+        fun mapLegacy(values: List<String>): TagMigrationResult {
+            if (values.isEmpty()) return TagMigrationResult(emptyList(), emptyList())
+            val resolved = LinkedHashSet<String>()
+            val unresolved = mutableListOf<String>()
+            values.forEach { raw ->
+                val candidate = resolve(raw)
+                if (candidate != null) {
+                    resolved.add(candidate)
+                } else {
+                    unresolved.add(raw)
+                }
+            }
+            return TagMigrationResult(resolved.toList(), unresolved)
+        }
+
+        private fun resolve(value: String): String? {
+            if (value.isBlank()) return null
+            if (canonicalIds.contains(value)) return value
+            val lower = value.lowercase(Locale.US)
+            idLookup[lower]?.let { return it }
+            labelLookup[lower]?.let { return it }
+            return null
+        }
+
+        companion object {
+            val EMPTY = TagMappingContext(null, Locale.getDefault())
         }
     }
 
@@ -459,7 +690,8 @@ class NoteRepository(
                     StructuredNote.ToDo(
                         text = item.text,
                         status = item.status,
-                        tags = item.tags,
+                        tagIds = item.tagIds,
+                        tagLabels = item.tagLabels,
                         dueDate = item.dueDate,
                         eventDate = item.eventDate,
                         id = item.id
@@ -483,7 +715,8 @@ class NoteRepository(
                 notes.add(
                     StructuredNote.Memo(
                         text = item.text,
-                        tags = item.tags
+                        tagIds = item.tagIds,
+                        tagLabels = item.tagLabels,
                     )
                 )
             }

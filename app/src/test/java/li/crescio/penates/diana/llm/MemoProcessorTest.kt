@@ -377,8 +377,8 @@ class MemoProcessorTest {
                 processAppointments = false,
             )
 
-            assertEquals(listOf("tag"), summary.todoItems.first().tags)
-            assertEquals(listOf("tag"), summary.thoughtItems.first().tags)
+            assertEquals(listOf("tag"), summary.todoItems.first().tagIds)
+            assertEquals(listOf("tag"), summary.thoughtItems.first().tagIds)
             verify(atLeast = 2) {
                 Log.w("MemoProcessor", match { it.contains("Dropping disallowed tags") })
             }
@@ -443,7 +443,7 @@ class MemoProcessorTest {
         assertEquals("main-topic", root.anchor)
         assertEquals(1, root.children.size)
         assertEquals("custom", root.children.first().anchor)
-        assertEquals(listOf("reflection"), summary.thoughtItems.first().tags)
+        assertEquals(listOf("reflection"), summary.thoughtItems.first().tagIds)
 
         server.shutdown()
     }
