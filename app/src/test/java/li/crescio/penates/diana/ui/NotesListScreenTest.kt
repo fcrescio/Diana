@@ -4,7 +4,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -40,6 +39,7 @@ class NotesListScreenTest {
                 todoItems = listOf(item),
                 appointments = emptyList(),
                 notes = emptyList(),
+                thoughtDocument = null,
                 logs = emptyList(),
                 showTodos = true,
                 showAppointments = false,
@@ -106,7 +106,6 @@ class NotesListScreenTest {
         }
 
         val markdownNode = composeTestRule.onNodeWithTag("thought-markdown")
-        markdownNode.assertExists()
         markdownNode.assert(
             SemanticsMatcher.expectValue(
                 SemanticsProperties.Text,
