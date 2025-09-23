@@ -8,6 +8,7 @@ This log captures active initiatives and recent pushes so contributors can orien
 | ---------- | ----------- | ------- | -------------- |
 | 2025-09-24 | Shipped     | Delete-session dialog polished with vertically stacked Material buttons to preserve touch targets. | Verified via Compose previews on phone and tablet widths. |
 | 2025-09-22 | In progress | Thought-document refactor: migrate memo processing to produce markdown bodies and navigation outlines, update persistence, and expose the richer structure in the UI. | [Thought document refactor plan](thoughts/thought-document-plan.md) |
+| 2025-09-25 | In progress | Localized, user-managed tag catalog: scope curated tag list and orchestration for multilingual display. | [Tag catalog planning notes](thoughts/tag-catalog-plan.md) |
 
 ## Template for new entries
 
