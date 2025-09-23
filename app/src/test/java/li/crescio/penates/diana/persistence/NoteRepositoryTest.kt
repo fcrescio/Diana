@@ -525,7 +525,7 @@ class NoteRepositoryTest {
         val toJson = NoteRepository::class.java.getDeclaredMethod("toJson", StructuredNote::class.java)
             .apply { isAccessible = true }
         val tagContextClass = Class.forName(
-            "li.crescio.penates.diana.persistence.NoteRepository\\$TagMappingContext"
+            "li.crescio.penates.diana.persistence.NoteRepository\$TagMappingContext"
         )
         val companionField = tagContextClass.getDeclaredField("Companion").apply { isAccessible = true }
         val companion = companionField.get(null)

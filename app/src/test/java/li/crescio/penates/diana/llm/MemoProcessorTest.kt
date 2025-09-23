@@ -112,7 +112,10 @@ class MemoProcessorTest {
         assertEquals(thoughtMarkdown, document.markdownBody)
         assertEquals(1, document.outline.sections.size)
         assertEquals("overview", document.outline.sections.first().anchor)
-        assertEquals(listOf(Thought("Review the new plan", listOf("planning"))), summary.thoughtItems)
+        assertEquals(
+            listOf(Thought("Review the new plan", listOf("planning"), listOf("Planning"))),
+            summary.thoughtItems
+        )
         verify(exactly = 3) { logger.log(any(), any()) }
 
         server.shutdown()
@@ -155,7 +158,7 @@ class MemoProcessorTest {
             todo = "first",
             appointments = "",
             thoughts = "",
-            todoItems = listOf(TodoItem("first", "not_started", listOf("tag"))),
+            todoItems = listOf(TodoItem("first", "not_started", listOf("tag"), listOf("General"))),
             appointmentItems = emptyList(),
             thoughtItems = emptyList()
         )
@@ -169,8 +172,8 @@ class MemoProcessorTest {
 
         assertEquals(
             listOf(
-                TodoItem("first", "not_started", listOf("tag")),
-                TodoItem("second", "not_started", listOf("tag"))
+                TodoItem("first", "not_started", listOf("tag"), listOf("General")),
+                TodoItem("second", "not_started", listOf("tag"), listOf("General"))
             ),
             summary.todoItems
         )
@@ -222,8 +225,8 @@ class MemoProcessorTest {
 
         assertEquals(
             listOf(
-                TodoItem("first", "not_started", listOf("tag")),
-                TodoItem("second", "not_started", listOf("tag"))
+                TodoItem("first", "not_started", listOf("tag"), listOf("General")),
+                TodoItem("second", "not_started", listOf("tag"), listOf("General"))
             ),
             summary.todoItems
         )
@@ -269,7 +272,7 @@ class MemoProcessorTest {
             todo = tricky,
             appointments = "",
             thoughts = "",
-            todoItems = listOf(TodoItem(tricky, "not_started", listOf("tag"))),
+            todoItems = listOf(TodoItem(tricky, "not_started", listOf("tag"), listOf("General"))),
             appointmentItems = emptyList(),
             thoughtItems = emptyList(),
         )
@@ -284,18 +287,38 @@ class MemoProcessorTest {
         val content = obj.getJSONArray("messages").getJSONObject(1).getString("content")
 
         assertTrue(content.contains(memoText))
+        val lines = content.split("\n")
+        var priorIndex = -1
+        for ((idx, line) in lines.withIndex()) {
+            if (line.contains("Prior items (structured JSON):")) {
+                priorIndex = idx
+                break
+            }
+        }
+        if (priorIndex == -1) fail("Missing prior JSON section in prompt")
+        var priorJsonLine: String? = null
+        for (i in priorIndex + 1 until lines.size) {
+            val candidate = lines[i]
+            if (candidate.contains("{")) {
+                priorJsonLine = candidate
+                break
+            }
+        }
+        val priorLine = checkNotNull(priorJsonLine) { "Missing prior JSON in prompt" }
+        val jsonStart = priorLine.indexOf('{')
+        if (jsonStart < 0) fail("Malformed prior JSON line")
+        val priorObj = JSONObject(priorLine.substring(jsonStart).trim())
         val expectedPrior = JSONObject().apply {
-            put("markdown_body", tricky)
-            put("sections", JSONArray())
-            val itemsArr = JSONArray()
-            val itemObj = JSONObject()
-                .put("text", tricky)
-                .put("status", "not_started")
-                .put("tags", JSONArray().put("tag"))
-            itemsArr.put(itemObj)
-            put("items", itemsArr)
-        }.toString()
-        assertTrue(content.contains(expectedPrior))
+            put("items", JSONArray().apply {
+                put(
+                    JSONObject()
+                        .put("text", tricky)
+                        .put("status", "not_started")
+                        .put("tags", JSONArray().put("tag"))
+                )
+            })
+        }
+        assertTrue(priorObj.similar(expectedPrior))
         assertTrue(content.contains("- tag: General"))
         assertTrue(content.contains("- planning: Planning"))
         val schemaObj = obj
@@ -380,10 +403,10 @@ class MemoProcessorTest {
             assertEquals(listOf("tag"), summary.todoItems.first().tagIds)
             assertEquals(listOf("tag"), summary.thoughtItems.first().tagIds)
             verify(atLeast = 2) {
-                Log.w("MemoProcessor", match { it.contains("Dropping disallowed tags") })
+                Log.w("MemoProcessor", match<String> { it.contains("Dropping disallowed tags") })
             }
             verify(atLeast = 2) {
-                Log.w("MemoProcessor", match { it.contains("Mapping disallowed tags") })
+                Log.w("MemoProcessor", match<String> { it.contains("Mapping disallowed tags") })
             }
         } finally {
             server.shutdown()

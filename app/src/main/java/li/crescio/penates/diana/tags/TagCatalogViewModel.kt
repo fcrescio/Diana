@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.LinkedHashMap
 import java.util.UUID
 
 private const val ENGLISH_LANGUAGE_TAG = "en"
@@ -269,19 +270,6 @@ class TagCatalogViewModel(
         )
     }
 
-    private fun EditableTag.toDefinition(): TagDefinition {
-        val sanitizedLabels = labels.map { label ->
-            val locale = label.locale.trim().takeUnless { it.isBlank() }
-            LocalizedLabel.create(locale, label.value.trim())
-        }
-        val colorValue = color.trim().takeUnless { it.isBlank() }
-        return TagDefinition(
-            id = id.trim(),
-            labels = sanitizedLabels,
-            color = colorValue,
-        )
-    }
-
     private fun newTagKey(): String = UUID.randomUUID().toString()
     private fun newLabelKey(): String = UUID.randomUUID().toString()
 }
@@ -321,4 +309,28 @@ data class TagValidation(
     val isValid: Boolean
         get() = !idMissing && !idDuplicate && !englishFallbackMissing &&
             labelLocaleDuplicate.isEmpty() && labelValueMissing.isEmpty()
+}
+
+internal fun EditableTag.toDefinition(): TagDefinition {
+    val sanitizedLabels = labels.map { label ->
+        val locale = label.locale.trim().takeUnless { it.isBlank() }
+        LocalizedLabel.create(locale, label.value.trim())
+    }
+    val colorValue = color.trim().takeUnless { it.isBlank() }
+    return TagDefinition(
+        id = id.trim(),
+        labels = sanitizedLabels,
+        color = colorValue,
+    )
+}
+
+internal fun TagCatalogUiState.toTagCatalog(): TagCatalog {
+    val definitionsById = LinkedHashMap<String, TagDefinition>()
+    tags.forEach { tag ->
+        val trimmedId = tag.id.trim()
+        if (trimmedId.isNotEmpty()) {
+            definitionsById.putIfAbsent(trimmedId, tag.toDefinition())
+        }
+    }
+    return TagCatalog(definitionsById.values.toList())
 }

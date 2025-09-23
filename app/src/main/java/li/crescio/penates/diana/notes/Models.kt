@@ -1,7 +1,7 @@
 package li.crescio.penates.diana.notes
 
 import li.crescio.penates.diana.tags.TagCatalog
-import java.util.LinkedHashSet
+import java.util.LinkedHashMap
 import java.util.Locale
 
 data class RawRecording(val filePath: String)
@@ -31,26 +31,32 @@ sealed class StructuredNote(open val createdAt: Long) {
         fun resolvedTagLabels(
             catalog: TagCatalog?,
             locale: Locale = Locale.getDefault(),
-        ): List<String> {
-            val resolved = LinkedHashSet<String>()
-            if (catalog != null) {
-                val byId = catalog.tags.associateBy { it.id }
-                tagIds.forEach { id ->
-                    val definition = byId[id]
-                    val label = definition?.labelForLocale(locale)
-                        ?: definition?.labels?.firstOrNull()?.value
-                    resolved.add(label?.takeIf { it.isNotBlank() } ?: id)
-                }
-            } else {
-                resolved.addAll(tagIds)
+        ): List<String> = resolvedTags(catalog, locale).map { it.label }
+
+        fun resolvedTags(
+            catalog: TagCatalog?,
+            locale: Locale = Locale.getDefault(),
+        ): List<ResolvedTag> {
+            val resolved = LinkedHashMap<String, ResolvedTag>()
+            val definitions = catalog?.tags?.associateBy { it.id }
+            tagIds.forEach { rawId ->
+                val id = rawId.trim()
+                if (id.isEmpty()) return@forEach
+                val definition = definitions?.get(id)
+                val label = definition?.labelForLocale(locale)
+                    ?: definition?.labels?.firstOrNull()?.value
+                    ?: id
+                val entry = ResolvedTag(id, label)
+                resolved.putIfAbsent(entry.id, entry)
             }
             tagLabels.forEach { label ->
                 val trimmed = label.trim()
                 if (trimmed.isNotEmpty()) {
-                    resolved.add(trimmed)
+                    val entry = ResolvedTag(trimmed, trimmed)
+                    resolved.putIfAbsent(entry.id, entry)
                 }
             }
-            return resolved.toList()
+            return resolved.values.toList()
         }
     }
 
@@ -90,3 +96,8 @@ sealed class StructuredNote(open val createdAt: Long) {
 }
 
 data class NoteCollection(val notes: List<StructuredNote>)
+
+data class ResolvedTag(
+    val id: String,
+    val label: String,
+)
