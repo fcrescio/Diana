@@ -16,7 +16,7 @@
             "text": { "type": "string" },
             "tags": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": { "type": "string", "enum": [] }
             }
           },
           "required": ["text", "tags"]

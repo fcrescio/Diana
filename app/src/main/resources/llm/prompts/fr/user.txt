@@ -34,20 +34,23 @@ Règles :
    - Utilisez "cancelled" si la tâche ne sera pas faite.
    - Si vous mettez à jour un élément déjà "done", gardez "done" sauf si le mémo rouvre clairement la tâche.
 
-6) Tags  
-   - Fournissez 1–3 tags courts, tous en minuscules, dans la langue du mémo (ex. français : « santé », « échéance », « suivi »).  
-   - Préférez les tags liés au domaine suggéré par le mémo ; évitez les termes trop génériques.  
+6) Tags
+   - Choisissez 1 à 3 identifiants de tag dans le catalogue approuvé ci-dessous. N’inventez PAS de nouveaux identifiants.
+   - Retournez les identifiants exactement tels qu’ils apparaissent (sensible à la casse). Si aucun ID ne correspond parfaitement, choisissez l’option disponible la plus proche.
 
 7) Sécurité  
    - Pas de duplication.  
    - Soyez concis : chaque "text" est une seule phrase actionnable.  
    - N’incluez jamais de copies brutes du prior ou du mémo en dehors du "text" nettoyé.  
 
-Contexte :  
-- Éléments précédents (JSON structuré) :  
-{prior}  
+Contexte :
+- Éléments précédents (JSON structuré) :
+{prior}
 
-- Date d’aujourd’hui (AAAA-MM-JJ) : {today}  
+- Date d’aujourd’hui (AAAA-MM-JJ) : {today}
 
-- Nouveau mémo (texte libre à analyser) :  
-{memo}  
+- Catalogue de tags approuvé (ID → libellé) :
+{tag_catalog}
+
+- Nouveau mémo (texte libre à analyser) :
+{memo}
