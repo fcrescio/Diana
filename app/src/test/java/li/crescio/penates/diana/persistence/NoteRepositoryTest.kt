@@ -285,7 +285,7 @@ class NoteRepositoryTest {
         every { firestore.collection("sessions") } returns sessionsCollection
         every { sessionsCollection.document(SESSION_ID) } returns sessionDocument
         every { sessionDocument.collection("notes") } returns collection
-        every { collection.whereEqualTo(any(), any()) } returns collection
+        every { collection.whereEqualTo(any<String>(), any()) } returns collection
         every { collection.get() } returns Tasks.forResult(querySnapshot)
         every { querySnapshot.documents } returns emptyList()
         every { collection.document(any()) } returns docRef

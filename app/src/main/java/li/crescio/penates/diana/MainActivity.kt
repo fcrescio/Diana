@@ -80,6 +80,7 @@ import li.crescio.penates.diana.persistence.MemoRepository
 import li.crescio.penates.diana.session.Session
 import li.crescio.penates.diana.session.SessionRepository
 import li.crescio.penates.diana.session.SessionSettings
+import li.crescio.penates.diana.tags.TagCatalogRepository
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -301,6 +302,7 @@ class MainActivity : ComponentActivity() {
                             importableSessions = importableSessions,
                             repository = environment.noteRepository,
                             memoRepository = environment.memoRepository,
+                            tagCatalogRepository = environment.tagCatalogRepository,
                             onUpdateSession = { updatedSession ->
                                 val persisted = sessionRepository.update(updatedSession)
                                 environment = environment.copy(session = persisted)
@@ -369,6 +371,11 @@ class MainActivity : ComponentActivity() {
             session = session,
             noteRepository = NoteRepository(firestore, session.id, notesFile),
             memoRepository = MemoRepository(memoFile),
+            tagCatalogRepository = TagCatalogRepository(
+                sessionId = session.id,
+                sessionDir = sessionDir,
+                firestore = firestore,
+            ),
         )
     }
 
@@ -438,6 +445,7 @@ private data class SessionEnvironment(
     val session: Session,
     val noteRepository: NoteRepository,
     val memoRepository: MemoRepository,
+    val tagCatalogRepository: TagCatalogRepository,
 )
 
 private data class SessionInitialization(
@@ -452,6 +460,7 @@ fun DianaApp(
     importableSessions: List<Session>,
     repository: NoteRepository,
     memoRepository: MemoRepository,
+    tagCatalogRepository: TagCatalogRepository,
     onUpdateSession: (Session) -> Session,
     onSwitchSession: (Session) -> Unit,
     onAddSession: () -> Unit,
