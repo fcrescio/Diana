@@ -36,18 +36,18 @@ class ThoughtsSectionUtilsTest {
         val notes = listOf(
             StructuredNote.Memo(
                 text = "Anchor note",
-                tags = listOf("anchor"),
+                tagIds = listOf("anchor"),
                 sectionAnchor = "intro",
                 sectionTitle = "Intro",
             ),
             StructuredNote.Memo(
                 text = "Title note",
-                tags = listOf("title"),
+                tagIds = listOf("title"),
                 sectionTitle = "Intro",
             ),
             StructuredNote.Free(
                 text = "Loose",
-                tags = listOf("free"),
+                tagIds = listOf("free"),
             ),
         )
 

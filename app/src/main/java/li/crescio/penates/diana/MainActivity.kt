@@ -367,15 +367,22 @@ class MainActivity : ComponentActivity() {
         migrateLegacyFile(File(filesDir, "notes.txt"), notesFile)
         migrateLegacyFile(File(sessionDir, "memos.txt"), memoFile)
 
+        val tagCatalogRepository = TagCatalogRepository(
+            sessionId = session.id,
+            sessionDir = sessionDir,
+            firestore = firestore,
+        )
+        val noteRepository = NoteRepository(
+            firestore = firestore,
+            sessionId = session.id,
+            notesFile = notesFile,
+            tagCatalogRepository = tagCatalogRepository,
+        )
         return SessionEnvironment(
             session = session,
-            noteRepository = NoteRepository(firestore, session.id, notesFile),
+            noteRepository = noteRepository,
             memoRepository = MemoRepository(memoFile),
-            tagCatalogRepository = TagCatalogRepository(
-                sessionId = session.id,
-                sessionDir = sessionDir,
-                firestore = firestore,
-            ),
+            tagCatalogRepository = tagCatalogRepository,
         )
     }
 
@@ -571,8 +578,8 @@ fun DianaApp(
     fun syncProcessor() {
         val thoughtItems = thoughtNotes.map { note ->
             when (note) {
-                is StructuredNote.Memo -> Thought(note.text, note.tags)
-                is StructuredNote.Free -> Thought(note.text, note.tags)
+                is StructuredNote.Memo -> Thought(note.text, note.tagIds, note.tagLabels)
+                is StructuredNote.Free -> Thought(note.text, note.tagIds, note.tagLabels)
                 else -> throw IllegalStateException("Unexpected note type")
             }
         }
@@ -600,7 +607,17 @@ fun DianaApp(
         val eventNotes = notes.filterIsInstance<StructuredNote.Event>()
         val memoNotes = notes.filterIsInstance<StructuredNote.Memo>()
         val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
-        todoItems = todoNotes.map { TodoItem(it.text, it.status, it.tags, it.dueDate, it.eventDate, it.id) }
+        todoItems = todoNotes.map {
+            TodoItem(
+                text = it.text,
+                status = it.status,
+                tagIds = it.tagIds,
+                tagLabels = it.tagLabels,
+                dueDate = it.dueDate,
+                eventDate = it.eventDate,
+                id = it.id,
+            )
+        }
         appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
         thoughtDocument = repository.loadThoughtDocument()
         thoughtNotes = memoNotes + freeNotes
@@ -627,7 +644,13 @@ fun DianaApp(
                     appointments = summary.appointmentItems
                 }
                 if (processThoughts) {
-                    thoughtNotes = summary.thoughtItems.map { StructuredNote.Memo(it.text, it.tags) }
+                    thoughtNotes = summary.thoughtItems.map {
+                        StructuredNote.Memo(
+                            text = it.text,
+                            tagIds = it.tagIds,
+                            tagLabels = it.tagLabels,
+                        )
+                    }
                     thoughtDocument = summary.thoughtDocument ?: thoughtDocument
                 }
                 val saved = repository.saveSummary(summary, processTodos, processAppointments, processThoughts)

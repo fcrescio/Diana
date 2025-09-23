@@ -1,6 +1,7 @@
 package li.crescio.penates.diana.llm
 
 import li.crescio.penates.diana.notes.Memo
+import li.crescio.penates.diana.notes.StructuredNote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -127,26 +128,42 @@ class MemoProcessor(
 
     private fun sanitizeTodoItems(items: List<TodoItem>): List<TodoItem> {
         return items.map { item ->
-            val sanitizedTags = sanitizeTags(item.tags, "existing todo '${item.text}'")
-            if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+            sanitizeTodoItem(item, "existing todo '${item.text}'")
         }
     }
 
     private fun sanitizeThoughtItems(items: List<Thought>): List<Thought> {
         return items.map { item ->
-            val sanitizedTags = sanitizeTags(item.tags, "existing thought '${item.text}'")
-            if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+            sanitizeThoughtItem(item, "existing thought '${item.text}'")
         }
     }
 
     private fun sanitizeTodoItem(item: TodoItem, context: String): TodoItem {
-        val sanitizedTags = sanitizeTags(item.tags, context)
-        return if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+        val sanitizedTags = sanitizeTags(item.tagIds, context)
+        val resolvedLabels = if (sanitizedTags == item.tagIds) {
+            if (item.tagLabels.isNotEmpty()) item.tagLabels else labelsFor(item.tagIds)
+        } else {
+            labelsFor(sanitizedTags)
+        }
+        return if (sanitizedTags == item.tagIds && resolvedLabels == item.tagLabels) {
+            item
+        } else {
+            item.copy(tagIds = sanitizedTags, tagLabels = resolvedLabels)
+        }
     }
 
     private fun sanitizeThoughtItem(item: Thought, context: String): Thought {
-        val sanitizedTags = sanitizeTags(item.tags, context)
-        return if (sanitizedTags == item.tags) item else item.copy(tags = sanitizedTags)
+        val sanitizedTags = sanitizeTags(item.tagIds, context)
+        val resolvedLabels = if (sanitizedTags == item.tagIds) {
+            if (item.tagLabels.isNotEmpty()) item.tagLabels else labelsFor(item.tagIds)
+        } else {
+            labelsFor(sanitizedTags)
+        }
+        return if (sanitizedTags == item.tagIds && resolvedLabels == item.tagLabels) {
+            item
+        } else {
+            item.copy(tagIds = sanitizedTags, tagLabels = resolvedLabels)
+        }
     }
 
     private fun sanitizeTags(tags: List<String>, context: String): List<String> {
@@ -183,6 +200,13 @@ class MemoProcessor(
         } else {
             emptyList()
         }
+    }
+
+    private fun labelsFor(ids: List<String>): List<String> {
+        if (ids.isEmpty()) return emptyList()
+        if (tagCatalogSnapshot.descriptors.isEmpty()) return emptyList()
+        val byId = tagCatalogSnapshot.descriptors.associate { it.id to it.label }
+        return ids.mapNotNull { id -> byId[id] }
     }
 
     private fun applyTagEnumeration(aspect: String, schemaObject: JSONObject) {
@@ -268,7 +292,7 @@ class MemoProcessor(
             itemObj.put("text", item.text)
             itemObj.put("status", item.status)
             val tagsArr = JSONArray()
-            item.tags.forEach { tagsArr.put(it) }
+            item.tagIds.forEach { tagsArr.put(it) }
             itemObj.put("tags", tagsArr)
             if (item.dueDate.isNotBlank()) itemObj.put("due_date", item.dueDate)
             if (item.eventDate.isNotBlank()) itemObj.put("event_date", item.eventDate)
@@ -310,7 +334,7 @@ class MemoProcessor(
             val itemObj = JSONObject()
             itemObj.put("text", item.text)
             val tagsArr = JSONArray()
-            item.tags.forEach { tagsArr.put(it) }
+            item.tagIds.forEach { tagsArr.put(it) }
             itemObj.put("tags", tagsArr)
             itemsArr.put(itemObj)
         }
@@ -479,7 +503,12 @@ class MemoProcessor(
                         val text = itemObj.optString("text")
                         val status = itemObj.optString("status")
                         val tagsArr = itemObj.optJSONArray("tags")
-                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                        val tags = (0 until (tagsArr?.length() ?: 0))
+                            .map { tagsArr.optString(it) }
+                            .mapNotNull { value ->
+                                val trimmed = value.trim()
+                                trimmed.takeIf { it.isNotEmpty() }
+                            }
                         val dueDate = itemObj.optString("due_date", "")
                         val eventDate = itemObj.optString("event_date", "")
                         val id = itemObj.optString("id", "")
@@ -492,7 +521,14 @@ class MemoProcessor(
                                 "todo item '$text'"
                             }
                             val sanitized = sanitizeTodoItem(
-                                TodoItem(text, status, tags, dueDate, eventDate, id),
+                                TodoItem(
+                                    text = text,
+                                    status = status,
+                                    tagIds = tags,
+                                    dueDate = dueDate,
+                                    eventDate = eventDate,
+                                    id = id,
+                                ),
                                 context,
                             )
                             op to sanitized
@@ -526,12 +562,20 @@ class MemoProcessor(
                         val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
                         val text = itemObj.optString("text")
                         val tagsArr = itemObj.optJSONArray("tags")
-                        val tags = (0 until (tagsArr?.length() ?: 0)).map { tagsArr.optString(it) }
+                        val tags = (0 until (tagsArr?.length() ?: 0))
+                            .map { tagsArr.optString(it) }
+                            .mapNotNull { value ->
+                                val trimmed = value.trim()
+                                trimmed.takeIf { it.isNotEmpty() }
+                            }
                         if (text.isBlank()) {
                             null
                         } else {
                             sanitizeThoughtItem(
-                                Thought(text, tags),
+                                Thought(
+                                    text = text,
+                                    tagIds = tags,
+                                ),
                                 "thought item '$text'",
                             )
                         }
@@ -608,11 +652,12 @@ class MemoProcessor(
 data class TodoItem(
     val text: String,
     val status: String,
-    val tags: List<String>,
+    override val tagIds: List<String>,
+    override val tagLabels: List<String> = emptyList(),
     val dueDate: String = "",
     val eventDate: String = "",
     val id: String = "",
-)
+) : StructuredNote.Tagged
 
 data class Appointment(val text: String, val datetime: String, val location: String)
 
@@ -626,7 +671,11 @@ data class MemoSummary(
     val thoughtDocument: ThoughtDocument? = null,
 )
 
-data class Thought(val text: String, val tags: List<String>)
+data class Thought(
+    val text: String,
+    override val tagIds: List<String>,
+    override val tagLabels: List<String> = emptyList(),
+) : StructuredNote.Tagged
 
 class LlmLogger(private val maxLogs: Int = 100) {
     private val logs = ArrayDeque<String>()
