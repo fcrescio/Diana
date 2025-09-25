@@ -44,6 +44,20 @@ still operate on the newline-delimited `thoughts` string and will need updates:
 - Tests rely on the plain string contract:
   - `MemoProcessorTest` asserts on `summary.thoughts` contents and seeds
     initialization with simple strings.
-  - `NoteRepositoryTest` constructs `MemoSummary` instances with raw `thoughts`
-    strings when exercising persistence helpers.
+- `NoteRepositoryTest` constructs `MemoSummary` instances with raw `thoughts`
+  strings when exercising persistence helpers.
   (under `app/src/test/java/li/crescio/penates/diana/...`)
+
+## Usage guidance & next steps
+- **Scripts** – `scripts/process_memo.py` now mirrors the Android pipeline for
+  local or CI batch processing. Provide a service account key, a memo via
+  `--memo`/`--memo-file`, and use `--update` only after confirming the dry-run
+  output.
+- **Caveats** – Firestore writes reuse the mobile repository semantics (notes are
+  appended rather than diffed), so run housekeeping (`clearTodos`/`clearThoughts`)
+  if you need to reset a session before large migrations. The OpenRouter call
+  shares the production prompt/schema, so keep an eye on rate limits when
+  replaying many memos.
+- **Next steps** – Fold the Python processor into any automation that prepares
+  demo data, then revisit the Kotlin call sites flagged above to finish the
+  document-first flow once the memo/thought prompts stabilize.
