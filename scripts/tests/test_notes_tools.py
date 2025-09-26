@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import date
 from dataclasses import dataclass
 
 from scripts.notes_tools.memo_processing import MemoProcessor
@@ -98,6 +99,24 @@ class NotesToolsTest(unittest.TestCase):
             schema["schema"]["properties"]["items"]["items"]["properties"]["tags"]["items"]["enum"]
         )
         self.assertEqual(tags_enum, ["alpha", "beta"])
+
+    def test_prepare_requests_replaces_date_placeholder(self) -> None:
+        processor = MemoProcessor(api_key="secret")
+        requests = processor.prepare_requests(
+            "memo text",
+            process_appointments=False,
+            process_thoughts=False,
+        )
+        payload = requests[processor.prompts.todo]
+        messages = payload.get("messages", [])
+        user_message = next(
+            (msg.get("content", "") for msg in messages if msg.get("role") == "user"),
+            "",
+        )
+        today = date.today().isoformat()
+        self.assertNotIn("{date}", user_message)
+        self.assertNotIn("{today}", user_message)
+        self.assertIn(today, user_message)
 
 
 if __name__ == "__main__":
