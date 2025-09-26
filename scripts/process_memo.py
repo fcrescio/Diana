@@ -16,9 +16,8 @@ from google.api_core.exceptions import GoogleAPIError
 from google.api_core.retry import Retry
 from google.cloud import firestore
 
-from notes_tools import (
+from notes_tools.notes import (
     Appointment,
-    MemoProcessor,
     MemoSummary,
     NotesTagCatalog,
     Session,
@@ -28,15 +27,17 @@ from notes_tools import (
     ThoughtOutline,
     ThoughtOutlineSection,
     TodoItem,
-    initialize_firestore,
-    load_resource,
     parse_remote_note,
     parse_remote_session,
     structured_note_to_map,
     summary_to_notes,
 )
-from notes_tools.memo_processing import LlmLogger
-
+from notes_tools.memo_processing import (
+    MemoProcessor,
+    load_resource,
+    LlmLogger
+)
+from notes_tools.firebase import initialize_firestore
 
 THOUGHT_DOCUMENT_ID = "__thought_document__"
 THOUGHT_DOCUMENT_TYPE = "thought_document"
