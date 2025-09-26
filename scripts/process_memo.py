@@ -374,13 +374,58 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _load_local_properties() -> Mapping[str, str]:
+    """Load properties from the nearest ``local.properties`` file if available."""
+
+    search_roots = []
+    script_path = Path(__file__).resolve()
+    search_roots.append(Path.cwd())
+    search_roots.extend(script_path.parents)
+
+    for directory in search_roots:
+        candidate = directory / "local.properties"
+        if not candidate.is_file():
+            continue
+        try:
+            properties: dict[str, str] = {}
+            for line in candidate.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if "=" not in stripped:
+                    continue
+                key, value = stripped.split("=", 1)
+                properties[key.strip()] = value.strip()
+            return properties
+        except OSError:
+            continue
+    return {}
+
+
+def _resolve_openrouter_api_key(args: argparse.Namespace) -> str:
+    explicit = (args.api_key or "").strip()
+    if explicit:
+        return explicit
+
+    env_value = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if env_value:
+        return env_value
+
+    properties = _load_local_properties()
+    file_value = properties.get("OPENROUTER_API_KEY", "").strip()
+    if file_value:
+        return file_value
+
+    raise ScriptError(
+        "OpenRouter API key is required (provide --api-key, OPENROUTER_API_KEY, or local.properties)"
+    )
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         memo_text = _memo_text(args)
-        api_key = args.api_key or os.environ.get("OPENROUTER_API_KEY", "").strip()
-        if not api_key:
-            raise ScriptError("OpenRouter API key is required (set --api-key or OPENROUTER_API_KEY)")
+        api_key = _resolve_openrouter_api_key(args)
         client = _load_firestore(args)
         session, summary, tag_catalog, locale = _load_session(client, args.session_id)
 
