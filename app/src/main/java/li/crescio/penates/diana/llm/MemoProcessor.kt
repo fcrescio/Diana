@@ -405,11 +405,13 @@ class MemoProcessor(
         applyTagEnumeration(aspect, schemaObject)
         val schemaString = schemaObject.toString()
         val system = prompts.systemTemplate.replace("{aspect}", aspect)
+        val today = LocalDate.now().toString()
         val user = prompts.userTemplate
             .replace("{aspect}", aspect)
             .replace("{prior}", priorJson)
             .replace("{memo}", memo)
-            .replace("{today}", LocalDate.now().toString())
+            .replace("{today}", today)
+            .replace("{date}", today)
             .replace("{tag_catalog}", tagCatalogSnapshot.promptText)
         val json = buildRequest(system, user, schemaString)
 

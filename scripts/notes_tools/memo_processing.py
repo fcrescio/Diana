@@ -362,12 +362,14 @@ class MemoProcessor:
             schema = json.loads(json.dumps(self.base_schema))
         self._apply_tag_enumeration(aspect, schema)
         system = self.prompts.system_template.replace("{aspect}", aspect)
+        today = date.today().isoformat()
         user = (
             self.prompts.user_template
             .replace("{aspect}", aspect)
             .replace("{prior}", prior_json)
             .replace("{memo}", memo_text)
-            .replace("{today}", date.today().isoformat())
+            .replace("{today}", today)
+            .replace("{date}", today)
             .replace("{tag_catalog}", self.tag_catalog_snapshot.prompt_text)
         )
         payload = {
