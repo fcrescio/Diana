@@ -78,6 +78,20 @@ class NotesToolsTest(unittest.TestCase):
         self.assertIn("Personal", getattr(note, "tag_labels"))
         self.assertEqual(getattr(note, "created_at"), 123)
 
+    def test_parse_remote_note_handles_non_numeric_created_at(self) -> None:
+        context = TagMappingContext(catalog=None, locale="en")
+        snapshot = DummySnapshot(
+            "note-iso",
+            {
+                "type": "todo",
+                "text": "Call the bank",
+                "createdAt": "2024-10-01T12:00:00Z",
+            },
+        )
+        note = parse_remote_note(snapshot, context)
+        self.assertIsNotNone(note)
+        self.assertEqual(getattr(note, "created_at"), 0)
+
     def test_schema_injects_tag_catalog(self) -> None:
         catalog = NotesTagCatalog(
             tags=[
