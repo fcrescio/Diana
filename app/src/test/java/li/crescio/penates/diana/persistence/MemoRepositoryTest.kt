@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import kotlin.io.path.createTempDirectory
 
 class MemoRepositoryTest {
     private lateinit var file: File
@@ -29,6 +30,22 @@ class MemoRepositoryTest {
         repository.addMemo(Memo("two", "audio"))
         val memos = repository.loadMemos()
         assertEquals(listOf(Memo("one"), Memo("two", "audio")), memos)
+    }
+
+    @Test
+    fun addMemoCreatesMissingParentDirectories() = runBlocking {
+        val root = createTempDirectory(prefix = "memo_repo").toFile()
+        try {
+            val nestedFile = File(root, "nested/memos.txt")
+            val nestedRepository = MemoRepository(nestedFile)
+
+            nestedRepository.addMemo(Memo("nested memo"))
+
+            val memos = nestedRepository.loadMemos()
+            assertEquals(listOf(Memo("nested memo")), memos)
+        } finally {
+            root.deleteRecursively()
+        }
     }
 }
 
