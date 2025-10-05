@@ -14,6 +14,29 @@ def _as_string_sequence(value: Any) -> list[str]:
     return []
 
 
+def _coerce_int(value: Any, *, default: int = 0) -> int:
+    """Best-effort conversion of Firestore timestamp fields to integers."""
+
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return default
+        try:
+            return int(trimmed)
+        except ValueError:
+            try:
+                return int(float(trimmed))
+            except ValueError:
+                return default
+    return default
+
+
 @dataclass(slots=True)
 class SessionSettings:
     process_todos: bool = True
@@ -366,7 +389,7 @@ def parse_remote_note(document: Any, tag_context: TagMappingContext) -> Structur
     text = data.get("text")
     if not isinstance(text, str) or not text.strip():
         return None
-    created_at = int(data.get("createdAt", 0) or 0)
+    created_at = _coerce_int(data.get("createdAt", 0))
     tag_ids, tag_labels = resolve_tag_data(
         explicit_ids=_as_string_sequence(data.get("tagIds")),
         explicit_labels=_as_string_sequence(data.get("tagLabels")),
