@@ -2,11 +2,17 @@ package li.crescio.penates.diana.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
@@ -35,19 +41,26 @@ fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Button(onClick = onBack) { Text(stringResource(R.string.back)) }
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(text = stringResource(R.string.settings)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                }
+            )
         }
-
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .weight(1f)
+                .padding(innerPadding)
+                .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
             Text(

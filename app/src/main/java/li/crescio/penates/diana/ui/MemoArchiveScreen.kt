@@ -5,10 +5,16 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,41 +43,58 @@ fun MemoArchiveScreen(
         memos = memoRepository.loadMemos()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Button(onClick = onBack) { Text(stringResource(R.string.back)) }
-        }
-
-        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            items(memos) { memo ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { memoPendingDeletion = memo }
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(text = stringResource(R.string.memo_archive)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
                         )
-                        .padding(vertical = 8.dp)
-                ) {
-                    if (memo.audioPath != null) {
-                        Button(onClick = { player.play(memo.audioPath) }) {
-                            Text(stringResource(R.string.play))
-                        }
                     }
-                    Text(
-                        memo.text,
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .weight(1f)
+            ) {
+                items(memos) { memo ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 16.dp)
-                    )
-                    Button(onClick = { onReprocess(memo) }) {
-                        Text(stringResource(R.string.reprocess))
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { memoPendingDeletion = memo }
+                            )
+                            .padding(vertical = 8.dp)
+                    ) {
+                        if (memo.audioPath != null) {
+                            Button(onClick = { player.play(memo.audioPath) }) {
+                                Text(stringResource(R.string.play))
+                            }
+                        }
+                        Text(
+                            memo.text,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 16.dp)
+                        )
+                        Button(onClick = { onReprocess(memo) }) {
+                            Text(stringResource(R.string.reprocess))
+                        }
                     }
                 }
             }
