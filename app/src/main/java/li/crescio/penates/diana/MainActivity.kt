@@ -836,7 +836,7 @@ fun DianaApp(
             if (screen == Screen.List) {
                 NavigationBar {
                     NavigationBarItem(
-                        selected = false,
+                        selected = screen == Screen.Recorder,
                         onClick = { screen = Screen.Recorder },
                         icon = {
                             Icon(
@@ -847,7 +847,7 @@ fun DianaApp(
                         label = { Text(stringResource(R.string.record)) }
                     )
                     NavigationBarItem(
-                        selected = false,
+                        selected = screen == Screen.TextMemo,
                         onClick = { screen = Screen.TextMemo },
                         icon = {
                             Icon(
@@ -858,7 +858,7 @@ fun DianaApp(
                         label = { Text(stringResource(R.string.text_memo)) }
                     )
                     NavigationBarItem(
-                        selected = false,
+                        selected = screen == Screen.Archive,
                         onClick = { screen = Screen.Archive },
                         icon = {
                             Icon(
@@ -869,7 +869,7 @@ fun DianaApp(
                         label = { Text(stringResource(R.string.memo_archive)) }
                     )
                     NavigationBarItem(
-                        selected = false,
+                        selected = screen == Screen.Settings,
                         onClick = { screen = Screen.Settings },
                         icon = {
                             Icon(
