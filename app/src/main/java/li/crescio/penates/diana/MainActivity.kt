@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -160,10 +161,12 @@ class MainActivity : ComponentActivity() {
                     "LLM refresh: end (skipped due to auth failure: ${codeInfo}message=$message)",
                 )
             }
-            if (sessionInitialization.createdDefaultSession) {
+            if (sessionInitialization.createdDefaultSession && sessionInitialization.session != null) {
                 migrateLegacyNotesCollection(firestore, sessionInitialization.session.id)
             }
-            val initialEnvironment = createSessionEnvironment(sessionInitialization.session, firestore)
+            val initialEnvironment = sessionInitialization.session?.let {
+                createSessionEnvironment(it, firestore)
+            }
             val initialImportSessions = try {
                 sessionRepository.fetchRemoteSessions()
             } catch (e: Exception) {
@@ -189,7 +192,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             setContent {
-                    var environment by remember { mutableStateOf(initialEnvironment) }
+                    var environment by remember { mutableStateOf<SessionEnvironment?>(initialEnvironment) }
                     val sessionsState = remember {
                         mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
                     }
@@ -224,8 +227,13 @@ class MainActivity : ComponentActivity() {
 
                     val addSession: () -> Unit = {
                         coroutineScope.launch {
+                            val wasEmpty = sessionsState.isEmpty()
                             val name = context.generateSessionName(sessionsState.map { it.name })
                             val created = sessionRepository.create(name, SessionSettings())
+                            if (wasEmpty) {
+                                migrateLegacyMemosToDefaultSession(created.id)
+                                migrateLegacyNotesCollection(firestore, created.id)
+                            }
                             refreshSessions()
                             switchSession(created)
                             try {
@@ -244,8 +252,8 @@ class MainActivity : ComponentActivity() {
                             }
                             val persisted = sessionRepository.update(session.copy(name = trimmed))
                             refreshSessions()
-                            if (environment.session.id == persisted.id) {
-                                environment = environment.copy(session = persisted)
+                            if (environment?.session?.id == persisted.id) {
+                                environment = environment?.copy(session = persisted)
                             }
                             try {
                                 sessionRepository.syncSessionRemote(persisted)
@@ -263,7 +271,7 @@ class MainActivity : ComponentActivity() {
                         session: Session,
                         deleteAction: (String) -> Boolean,
                     ) {
-                        val wasSelected = environment.session.id == session.id
+                        val wasSelected = environment?.session?.id == session.id
                         if (deleteAction(session.id)) {
                             refreshSessions()
                             val currentSelected = sessionRepository.getSelected()
@@ -272,10 +280,7 @@ class MainActivity : ComponentActivity() {
                                 currentSelected != null -> Unit
                                 sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
                                 else -> {
-                                    val name = context.generateSessionName(sessionsState.map { it.name })
-                                    val created = sessionRepository.create(name, SessionSettings())
-                                    refreshSessions()
-                                    switchSession(created)
+                                    environment = null
                                 }
                             }
                         }
@@ -298,38 +303,53 @@ class MainActivity : ComponentActivity() {
                     }
 
                     DianaTheme {
-                        DianaApp(
-                            session = environment.session,
-                            sessions = sessionsState,
-                            importableSessions = importableSessions,
-                            repository = environment.noteRepository,
-                            memoRepository = environment.memoRepository,
-                            tagCatalogRepository = environment.tagCatalogRepository,
-                            onUpdateSession = { updatedSession ->
-                                val persisted = sessionRepository.update(updatedSession)
-                                environment = environment.copy(session = persisted)
-                                refreshSessions()
-                                coroutineScope.launch {
-                                    try {
-                                        sessionRepository.syncSessionRemote(persisted)
-                                    } catch (e: Exception) {
-                                        Log.w(
-                                            "MainActivity",
-                                            "Failed to sync session ${persisted.id} to Firestore",
-                                            e,
-                                        )
+                        val activeEnvironment = environment
+                        if (activeEnvironment != null) {
+                            DianaApp(
+                                session = activeEnvironment.session,
+                                sessions = sessionsState,
+                                importableSessions = importableSessions,
+                                repository = activeEnvironment.noteRepository,
+                                memoRepository = activeEnvironment.memoRepository,
+                                tagCatalogRepository = activeEnvironment.tagCatalogRepository,
+                                onUpdateSession = { updatedSession ->
+                                    val persisted = sessionRepository.update(updatedSession)
+                                    environment = environment?.copy(session = persisted)
+                                    refreshSessions()
+                                    coroutineScope.launch {
+                                        try {
+                                            sessionRepository.syncSessionRemote(persisted)
+                                        } catch (e: Exception) {
+                                            Log.w(
+                                                "MainActivity",
+                                                "Failed to sync session ${persisted.id} to Firestore",
+                                                e,
+                                            )
+                                        }
                                     }
-                                }
-                                persisted
-                            },
-                            onSwitchSession = switchSession,
-                            onAddSession = addSession,
-                            onRenameSession = renameSession,
-                            onDeleteSessionLocal = deleteSessionLocal,
-                            onDeleteSessionRemote = deleteSessionRemote,
-                            onImportRemoteSession = importRemoteSession,
-                            onRefreshImportableSessions = { refreshRemoteSessionsList() },
-                        )
+                                    persisted
+                                },
+                                onSwitchSession = switchSession,
+                                onAddSession = addSession,
+                                onRenameSession = renameSession,
+                                onDeleteSessionLocal = deleteSessionLocal,
+                                onDeleteSessionRemote = deleteSessionRemote,
+                                onImportRemoteSession = importRemoteSession,
+                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                            )
+                        } else {
+                            NoActiveSessionScreen(
+                                sessions = sessionsState,
+                                importableSessions = importableSessions,
+                                onSwitchSession = switchSession,
+                                onAddSession = addSession,
+                                onRenameSession = renameSession,
+                                onDeleteSessionLocal = deleteSessionLocal,
+                                onDeleteSessionRemote = deleteSessionRemote,
+                                onImportRemoteSession = importRemoteSession,
+                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                            )
+                        }
                     }
                 }
             }
@@ -348,10 +368,8 @@ class MainActivity : ComponentActivity() {
             return SessionInitialization(existing, createdDefaultSession = false)
         }
 
-        val created = sessionRepository.create("Default Session", SessionSettings())
-        sessionRepository.setSelected(created.id)
-        migrateLegacyMemosToDefaultSession(created.id)
-        return SessionInitialization(created, createdDefaultSession = true)
+        sessionRepository.setSelected(null)
+        return SessionInitialization(session = null, createdDefaultSession = false)
     }
 
     private fun createSessionEnvironment(
@@ -458,9 +476,75 @@ private data class SessionEnvironment(
 )
 
 private data class SessionInitialization(
-    val session: Session,
+    val session: Session?,
     val createdDefaultSession: Boolean,
 )
+
+@Composable
+private fun NoActiveSessionScreen(
+    sessions: List<Session>,
+    importableSessions: List<Session>,
+    onSwitchSession: (Session) -> Unit,
+    onAddSession: () -> Unit,
+    onRenameSession: (Session, String) -> Unit,
+    onDeleteSessionLocal: (Session) -> Unit,
+    onDeleteSessionRemote: (Session) -> Unit,
+    onImportRemoteSession: (Session) -> Unit,
+    onRefreshImportableSessions: () -> Unit,
+) {
+    var showImportDialog by remember { mutableStateOf(false) }
+    val message = stringResource(R.string.no_active_session_message)
+    val addLabel = stringResource(R.string.add_session)
+
+    Scaffold(
+        topBar = {
+            SessionTabBar(
+                sessions = sessions,
+                selectedSessionId = null,
+                importableSessions = importableSessions,
+                onSelectSession = onSwitchSession,
+                onAddSession = onAddSession,
+                onRenameSession = onRenameSession,
+                onDeleteSessionLocal = onDeleteSessionLocal,
+                onDeleteSessionRemote = onDeleteSessionRemote,
+                onShowImportSessions = {
+                    onRefreshImportableSessions()
+                    showImportDialog = true
+                },
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onAddSession) {
+                Text(addLabel)
+            }
+        }
+    }
+
+    if (showImportDialog) {
+        ImportSessionsDialog(
+            sessions = importableSessions,
+            onDismiss = { showImportDialog = false },
+            onImportSession = { remoteSession ->
+                onImportRemoteSession(remoteSession)
+                showImportDialog = false
+            }
+        )
+    }
+}
 
 @Composable
 fun DianaApp(
@@ -974,7 +1058,7 @@ fun DianaApp(
 @Composable
 private fun SessionTabBar(
     sessions: List<Session>,
-    selectedSessionId: String,
+    selectedSessionId: String?,
     importableSessions: List<Session>,
     onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
