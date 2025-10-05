@@ -3,11 +3,20 @@ package li.crescio.penates.diana.persistence
 import li.crescio.penates.diana.notes.Memo
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 
 class MemoRepository(private val file: File) {
     suspend fun addMemo(memo: Memo) {
         if (!file.exists()) {
-            file.createNewFile()
+            val parent = file.parentFile
+            if (parent != null && !parent.exists()) {
+                if (!parent.mkdirs() && !parent.exists()) {
+                    throw IOException("Unable to create directory: ${parent.absolutePath}")
+                }
+            }
+            if (!file.exists()) {
+                file.createNewFile()
+            }
         }
         file.appendText(toJson(memo) + "\n")
     }
