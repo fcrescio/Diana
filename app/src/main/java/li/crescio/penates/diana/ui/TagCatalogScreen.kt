@@ -13,12 +13,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,7 @@ import li.crescio.penates.diana.tags.EditableLabel
 import li.crescio.penates.diana.tags.EditableTag
 import li.crescio.penates.diana.tags.TagCatalogUiState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TagCatalogScreen(
     state: TagCatalogUiState,
@@ -78,112 +80,113 @@ fun TagCatalogScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             when {
-            state.isLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            state.loadError != null -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = stringResource(R.string.tag_catalog_loading_error),
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Button(onClick = onRetry) {
-                        Text(stringResource(R.string.retry))
+                state.isLoading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
                 }
-            }
 
-            else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (state.tags.isEmpty()) {
-                        item {
+                state.loadError != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = stringResource(R.string.tag_catalog_loading_error),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Button(onClick = onRetry) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (state.tags.isEmpty()) {
+                            item {
+                                Text(
+                                    text = stringResource(R.string.tag_catalog_empty),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            items(state.tags, key = { it.key }) { tag ->
+                                TagEditorCard(
+                                    tag = tag,
+                                    onTagIdChange = { value -> onTagIdChange(tag.key, value) },
+                                    onTagColorChange = { value -> onTagColorChange(tag.key, value) },
+                                    onAddLabel = { onAddLabel(tag.key) },
+                                    onDeleteLabel = { labelKey -> onDeleteLabel(tag.key, labelKey) },
+                                    onLabelLocaleChange = { labelKey, value ->
+                                        onLabelLocaleChange(tag.key, labelKey, value)
+                                    },
+                                    onLabelValueChange = { labelKey, value ->
+                                        onLabelValueChange(tag.key, labelKey, value)
+                                    },
+                                    onDeleteTag = { onDeleteTag(tag.key) }
+                                )
+                            }
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (state.saveSuccess) {
                             Text(
-                                text = stringResource(R.string.tag_catalog_empty),
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
+                                text = stringResource(R.string.tag_catalog_saved),
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
-                    } else {
-                        items(state.tags, key = { it.key }) { tag ->
-                            TagEditorCard(
-                                tag = tag,
-                                onTagIdChange = { value -> onTagIdChange(tag.key, value) },
-                                onTagColorChange = { value -> onTagColorChange(tag.key, value) },
-                                onAddLabel = { onAddLabel(tag.key) },
-                                onDeleteLabel = { labelKey -> onDeleteLabel(tag.key, labelKey) },
-                                onLabelLocaleChange = { labelKey, value ->
-                                    onLabelLocaleChange(tag.key, labelKey, value)
-                                },
-                                onLabelValueChange = { labelKey, value ->
-                                    onLabelValueChange(tag.key, labelKey, value)
-                                },
-                                onDeleteTag = { onDeleteTag(tag.key) }
+                        if (state.saveError != null) {
+                            Text(
+                                text = stringResource(R.string.tag_catalog_save_error),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
-                    }
-                }
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (state.saveSuccess) {
-                        Text(
-                            text = stringResource(R.string.tag_catalog_saved),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    if (state.saveError != null) {
-                        Text(
-                            text = stringResource(R.string.tag_catalog_save_error),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = onAddTag,
-                        enabled = !state.isSaving,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.add_tag))
-                    }
-                    Button(
-                        onClick = onSave,
-                        enabled = !state.isSaving,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (state.isSaving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .padding(end = 8.dp),
-                                strokeWidth = 2.dp
-                            )
+                        OutlinedButton(
+                            onClick = onAddTag,
+                            enabled = !state.isSaving,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.add_tag))
                         }
-                        Text(stringResource(R.string.save))
+                        Button(
+                            onClick = onSave,
+                            enabled = !state.isSaving,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (state.isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .padding(end = 8.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                            Text(stringResource(R.string.save))
+                        }
                     }
                 }
             }
