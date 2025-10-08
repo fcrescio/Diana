@@ -54,6 +54,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.tasks.await
@@ -192,6 +193,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
             setContent {
+                    var showSplash by remember { mutableStateOf(true) }
+                    LaunchedEffect(Unit) {
+                        delay(1200)
+                        showSplash = false
+                    }
                     var environment by remember { mutableStateOf<SessionEnvironment?>(initialEnvironment) }
                     val sessionsState = remember {
                         mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
@@ -303,52 +309,56 @@ class MainActivity : ComponentActivity() {
                     }
 
                     DianaTheme {
-                        val activeEnvironment = environment
-                        if (activeEnvironment != null) {
-                            DianaApp(
-                                session = activeEnvironment.session,
-                                sessions = sessionsState,
-                                importableSessions = importableSessions,
-                                repository = activeEnvironment.noteRepository,
-                                memoRepository = activeEnvironment.memoRepository,
-                                tagCatalogRepository = activeEnvironment.tagCatalogRepository,
-                                onUpdateSession = { updatedSession ->
-                                    val persisted = sessionRepository.update(updatedSession)
-                                    environment = environment?.copy(session = persisted)
-                                    refreshSessions()
-                                    coroutineScope.launch {
-                                        try {
-                                            sessionRepository.syncSessionRemote(persisted)
-                                        } catch (e: Exception) {
-                                            Log.w(
-                                                "MainActivity",
-                                                "Failed to sync session ${persisted.id} to Firestore",
-                                                e,
-                                            )
-                                        }
-                                    }
-                                    persisted
-                                },
-                                onSwitchSession = switchSession,
-                                onAddSession = addSession,
-                                onRenameSession = renameSession,
-                                onDeleteSessionLocal = deleteSessionLocal,
-                                onDeleteSessionRemote = deleteSessionRemote,
-                                onImportRemoteSession = importRemoteSession,
-                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
-                            )
+                        if (showSplash) {
+                            SplashScreen(modifier = Modifier.fillMaxSize())
                         } else {
-                            NoActiveSessionScreen(
-                                sessions = sessionsState,
-                                importableSessions = importableSessions,
-                                onSwitchSession = switchSession,
-                                onAddSession = addSession,
-                                onRenameSession = renameSession,
-                                onDeleteSessionLocal = deleteSessionLocal,
-                                onDeleteSessionRemote = deleteSessionRemote,
-                                onImportRemoteSession = importRemoteSession,
-                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
-                            )
+                            val activeEnvironment = environment
+                            if (activeEnvironment != null) {
+                                DianaApp(
+                                    session = activeEnvironment.session,
+                                    sessions = sessionsState,
+                                    importableSessions = importableSessions,
+                                    repository = activeEnvironment.noteRepository,
+                                    memoRepository = activeEnvironment.memoRepository,
+                                    tagCatalogRepository = activeEnvironment.tagCatalogRepository,
+                                    onUpdateSession = { updatedSession ->
+                                        val persisted = sessionRepository.update(updatedSession)
+                                        environment = environment?.copy(session = persisted)
+                                        refreshSessions()
+                                        coroutineScope.launch {
+                                            try {
+                                                sessionRepository.syncSessionRemote(persisted)
+                                            } catch (e: Exception) {
+                                                Log.w(
+                                                    "MainActivity",
+                                                    "Failed to sync session ${persisted.id} to Firestore",
+                                                    e,
+                                                )
+                                            }
+                                        }
+                                        persisted
+                                    },
+                                    onSwitchSession = switchSession,
+                                    onAddSession = addSession,
+                                    onRenameSession = renameSession,
+                                    onDeleteSessionLocal = deleteSessionLocal,
+                                    onDeleteSessionRemote = deleteSessionRemote,
+                                    onImportRemoteSession = importRemoteSession,
+                                    onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                                )
+                            } else {
+                                NoActiveSessionScreen(
+                                    sessions = sessionsState,
+                                    importableSessions = importableSessions,
+                                    onSwitchSession = switchSession,
+                                    onAddSession = addSession,
+                                    onRenameSession = renameSession,
+                                    onDeleteSessionLocal = deleteSessionLocal,
+                                    onDeleteSessionRemote = deleteSessionRemote,
+                                    onImportRemoteSession = importRemoteSession,
+                                    onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                                )
+                            }
                         }
                     }
                 }

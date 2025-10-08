@@ -65,4 +65,5 @@
     <string name="add_label">Aggiungi etichetta</string>
     <string name="delete_label">Elimina etichetta</string>
     <string name="delete_tag">Elimina tag</string>
+    <string name="splash_diana_content_description">Illustrazione di Diana che tende il suo arco.</string>
 </resources>

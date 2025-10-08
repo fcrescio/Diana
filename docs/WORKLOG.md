@@ -6,6 +6,7 @@ This log captures active initiatives and recent pushes so contributors can orien
 
 | Date       | Status      | Summary | Further detail |
 | ---------- | ----------- | ------- | -------------- |
+| 2025-09-27 | Shipped     | Compose splash screen with huntress illustration and build badge gating startup. | [Splash screen concept](thoughts/splashscreen.md) — UI polish; splash shown for ~1.2s while app boots. |
 | 2025-09-26 | Shipped     | Memo prompt placeholders now replace `{date}` for scripts and Android to keep LLM instructions accurate. | [Memo date placeholder notes](thoughts/memo-date-placeholder.md) — Tests: `scripts/tests/test_notes_tools.py`. |
 | 2025-09-24 | In progress | Firebase notes scripting to backfill memo metadata and align Firestore exports with the memo processor. | [Firebase notes scripting plan](thoughts/firebase-notes-scripts.md) |
 | 2025-09-24 | Shipped     | Delete-session dialog polished with vertically stacked Material buttons to preserve touch targets. | Verified via Compose previews on phone and tablet widths. |

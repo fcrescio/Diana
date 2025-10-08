@@ -1,0 +1,22 @@
+<svg width="780" height="960" viewBox="0 0 260 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGradient" cx="30%" cy="18%" r="80%">
+      <stop offset="0%" stop-color="#150233"/>
+      <stop offset="55%" stop-color="#251158"/>
+      <stop offset="100%" stop-color="#351C70"/>
+    </radialGradient>
+  </defs>
+  <rect width="260" height="320" fill="url(#bgGradient)"/>
+  <g transform="translate(0,12)">
+    <path d="M130 4C64.486 4 12 56.486 12 122s52.486 118 118 118 118-52.486 118-118S195.514 4 130 4z" fill="#261040"/>
+    <path d="M182 20c43.96 18.88 74 64.44 74 108 0 64.88-43.84 123.32-108 145.6 40.96-44.72 49.04-110.16 27.6-164.16C165.2 74.84 154.6 50.96 182 20z" fill="#3C1F6A"/>
+    <path d="M144 46a24 24 0 1 1 48 0 24 24 0 1 1-48 0z" fill="#F3CEA0"/>
+    <path d="M148 78c25.84 31.56 41.28 72.44 38.12 112.64-3.16 40.08-22.04 78.8-52.12 107.36-20.96-24.48-32.52-50.6-33.96-78.24-1.44-27.4 6.28-55.72 20.92-85.04l-32.36 10.08C101.52 112.72 117.8 82.72 148 78z" fill="#4A2A86"/>
+    <path d="M128 116c-25.2 27.28-36.76 59.12-32.4 92 3.64 25.76 16.28 49.28 36 69.6-44.16-14.08-75.4-51.04-80.4-88.96C46.44 142.16 74.04 118.16 128 116z" fill="#6A3FB4"/>
+    <path d="M52 136c43.2-79.2 164.4-84 216 24-45.6 113.2-172.8 112.4-216-24z" stroke="#BFA1FF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="#BFA1FF" fill-opacity="0.08"/>
+    <path d="M94 198l118-28" stroke="#F5D680" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M214 164l18 14-24 8z" fill="#F5D680"/>
+    <path d="M168 70c10.32 4.4 19.72 10.72 26.96 18.8 4.16 4.52 7.44 9.24 9.2 14.44 1.36 4.12 1.52 8.64.48 13.56l-20.28-6.36c1.8-8.12.72-15.16-3.24-21.04-4.12-6.12-10.56-10.28-18.36-12.32z" fill="#201138"/>
+  </g>
+  <text x="130" y="294" text-anchor="middle" font-family="'IBM Plex Mono', 'Courier New', monospace" font-size="12" fill="#B9AFFF">build v0.1</text>
+</svg>
