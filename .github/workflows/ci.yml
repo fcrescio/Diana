@@ -21,10 +21,27 @@ jobs:
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+      - name: Derive version info
+        id: versioning
+        run: |
+          REF_NAME="${GITHUB_REF_NAME}"
+          if [ -z "$REF_NAME" ]; then
+            REF_NAME="${GITHUB_HEAD_REF}"
+          fi
+          if [ -z "$REF_NAME" ]; then
+            REF_NAME="$(git rev-parse --abbrev-ref HEAD)"
+          fi
+          SANITIZED_REF=$(echo "$REF_NAME" | sed 's/[^A-Za-z0-9._-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION_NAME="${SANITIZED_REF}-${SHORT_SHA}"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
       - name: Build
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          VERSION_NAME: ${{ steps.versioning.outputs.version_name }}
+          VERSION_CODE: ${{ steps.versioning.outputs.version_code }}
         run: ./gradlew assembleDebug
       - name: Firebase App Distribution
         if: success()
