@@ -89,4 +89,5 @@
     <string name="add_label">Add label</string>
     <string name="delete_label">Delete label</string>
     <string name="delete_tag">Delete tag</string>
+    <string name="splash_diana_content_description">Illustration of Diana drawing her bow.</string>
 </resources>

@@ -65,4 +65,5 @@
     <string name="add_label">Ajouter un libellé</string>
     <string name="delete_label">Supprimer le libellé</string>
     <string name="delete_tag">Supprimer le tag</string>
+    <string name="splash_diana_content_description">Illustration de Diane bandant son arc.</string>
 </resources>
