@@ -34,9 +34,16 @@
     <string name="clear_appointments">Clear appointments</string>
     <string name="clear_thoughts">Clear thoughts</string>
     <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
     <string name="cancel">Cancel</string>
     <string name="delete_todo_title">Delete to-do</string>
     <string name="delete_todo_message">Are you sure you want to delete this to-do?</string>
+    <string name="edit_todo_title">Edit to-do</string>
+    <string name="todo_text_label">Task</string>
+    <string name="todo_due_date_label">Due date</string>
+    <string name="todo_event_date_label">Event date</string>
+    <string name="todo_tag_ids_label">Tag IDs (comma separated)</string>
+    <string name="todo_tag_labels_label">Tag labels (comma separated)</string>
     <string name="delete_appointment_title">Delete appointment</string>
     <string name="delete_appointment_message">Are you sure you want to delete this appointment?</string>
     <string name="process_todo">Process to-dos</string>

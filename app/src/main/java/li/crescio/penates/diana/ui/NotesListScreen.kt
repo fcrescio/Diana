@@ -414,6 +414,7 @@ fun NotesListScreen(
     showThoughts: Boolean,
     modifier: Modifier = Modifier,
     onTodoCheckedChange: (TodoItem, Boolean) -> Unit,
+    onTodoEdit: (TodoItem) -> Unit,
     onTodoDelete: (TodoItem) -> Unit,
     onAppointmentDelete: (Appointment) -> Unit,
 ) {
@@ -441,6 +442,7 @@ fun NotesListScreen(
                             ) {
                                 var expanded by remember { mutableStateOf(false) }
                                 var showConfirm by remember { mutableStateOf(false) }
+                                var showEditor by remember { mutableStateOf(false) }
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
@@ -513,6 +515,13 @@ fun NotesListScreen(
                                             onDismissRequest = { expanded = false }
                                         ) {
                                             DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.edit)) },
+                                                onClick = {
+                                                    expanded = false
+                                                    showEditor = true
+                                                }
+                                            )
+                                            DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.delete)) },
                                                 onClick = {
                                                     expanded = false
@@ -521,6 +530,16 @@ fun NotesListScreen(
                                             )
                                         }
                                     }
+                                }
+                                if (showEditor) {
+                                    TodoEditDialog(
+                                        item = item,
+                                        onDismiss = { showEditor = false },
+                                        onConfirm = { updated ->
+                                            onTodoEdit(updated)
+                                            showEditor = false
+                                        }
+                                    )
                                 }
                                 if (showConfirm) {
                                     AlertDialog(
@@ -644,5 +663,89 @@ fun NotesListScreen(
 
         LogSection(logs)
     }
+}
+
+@Composable
+private fun TodoEditDialog(
+    item: TodoItem,
+    onDismiss: () -> Unit,
+    onConfirm: (TodoItem) -> Unit,
+) {
+    var text by remember(item) { mutableStateOf(item.text) }
+    var dueDate by remember(item) { mutableStateOf(item.dueDate) }
+    var eventDate by remember(item) { mutableStateOf(item.eventDate) }
+    var tagIds by remember(item) { mutableStateOf(item.tagIds.joinToString(", ")) }
+    var tagLabels by remember(item) { mutableStateOf(item.tagLabels.joinToString(", ")) }
+    val canSave = text.isNotBlank()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.edit_todo_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.todo_text_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = dueDate,
+                    onValueChange = { dueDate = it },
+                    label = { Text(stringResource(R.string.todo_due_date_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = eventDate,
+                    onValueChange = { eventDate = it },
+                    label = { Text(stringResource(R.string.todo_event_date_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = tagIds,
+                    onValueChange = { tagIds = it },
+                    label = { Text(stringResource(R.string.todo_tag_ids_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = tagLabels,
+                    onValueChange = { tagLabels = it },
+                    label = { Text(stringResource(R.string.todo_tag_labels_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val updated = item.copy(
+                        text = text.trim(),
+                        dueDate = dueDate.trim(),
+                        eventDate = eventDate.trim(),
+                        tagIds = parseTagInput(tagIds),
+                        tagLabels = parseTagInput(tagLabels),
+                    )
+                    onConfirm(updated)
+                },
+                enabled = canSave,
+            ) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
+
+private fun parseTagInput(value: String): List<String> {
+    if (value.isBlank()) return emptyList()
+    return value.split(',', '\n')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
 }
 

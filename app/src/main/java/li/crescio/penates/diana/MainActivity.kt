@@ -894,6 +894,34 @@ fun DianaApp(
         }
     ) { innerPadding ->
         val contentModifier = Modifier.padding(innerPadding)
+        fun persistNotes(currentTodos: List<TodoItem>) {
+            val currentAppointments = appointments
+            val includeAppointments = processAppointments
+            val includeThoughts = processThoughts
+            val currentThoughts = thoughtNotes
+            scope.launch {
+                val todoNotes = currentTodos.map {
+                    StructuredNote.ToDo(
+                        text = it.text,
+                        status = it.status,
+                        tagIds = it.tagIds,
+                        tagLabels = it.tagLabels,
+                        dueDate = it.dueDate,
+                        eventDate = it.eventDate,
+                        id = it.id,
+                    )
+                }
+                val apptNotes = if (includeAppointments) {
+                    currentAppointments.map {
+                        StructuredNote.Event(it.text, it.datetime, it.location)
+                    }
+                } else emptyList()
+                val thoughtNoteList = if (includeThoughts) currentThoughts else emptyList()
+                repository.saveNotes(todoNotes + apptNotes + thoughtNoteList)
+                syncProcessor()
+            }
+        }
+
         when (screen) {
             Screen.List -> NotesListScreen(
                 todoItems,
@@ -908,31 +936,17 @@ fun DianaApp(
                 processThoughts,
                 modifier = contentModifier,
                 onTodoCheckedChange = { item, checked ->
-                      val newStatus = if (checked) "done" else "not_started"
+                    val newStatus = if (checked) "done" else "not_started"
                     todoItems = todoItems.map {
                         if (it.id == item.id) it.copy(status = newStatus) else it
                     }
-                    scope.launch {
-                        val todoNotes = todoItems.map {
-                            StructuredNote.ToDo(
-                                text = it.text,
-                                status = it.status,
-                                tagIds = it.tagIds,
-                                tagLabels = it.tagLabels,
-                                dueDate = it.dueDate,
-                                eventDate = it.eventDate,
-                                id = it.id,
-                            )
-                        }
-                        val apptNotes = if (processAppointments) {
-                            appointments.map {
-                                StructuredNote.Event(it.text, it.datetime, it.location)
-                            }
-                        } else emptyList()
-                        val thoughtNoteList = if (processThoughts) thoughtNotes else emptyList()
-                        repository.saveNotes(todoNotes + apptNotes + thoughtNoteList)
-                        syncProcessor()
+                    persistNotes(todoItems)
+                },
+                onTodoEdit = { updated ->
+                    todoItems = todoItems.map { existing ->
+                        if (existing.id == updated.id) updated else existing
                     }
+                    persistNotes(todoItems)
                 },
                 onTodoDelete = { item ->
                     todoItems = todoItems.filterNot { it.id == item.id }
