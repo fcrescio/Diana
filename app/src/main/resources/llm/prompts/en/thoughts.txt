@@ -1,1 +1,1 @@
-thoughts and notes. Produce a full markdown document in "updated_markdown" plus an outline "sections" array with "title", "level", "anchor", and "children" aligned to the markdown headings.
+thoughts & notes
