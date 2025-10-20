@@ -5,39 +5,50 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.*
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -46,9 +57,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.*
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
@@ -193,178 +201,186 @@ class MainActivity : ComponentActivity() {
                 }
             }
             setContent {
-                    var showSplash by remember { mutableStateOf(true) }
-                    LaunchedEffect(Unit) {
-                        delay(1200)
-                        showSplash = false
-                    }
-                    var environment by remember { mutableStateOf<SessionEnvironment?>(initialEnvironment) }
-                    val sessionsState = remember {
-                        mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
-                    }
-                    val importableSessions = remember {
-                        mutableStateListOf<Session>().apply { addAll(initialImportSessions) }
-                    }
-                    val coroutineScope = rememberCoroutineScope()
-                    val context = this@MainActivity
+                var showSplash by remember { mutableStateOf(true) }
+                LaunchedEffect(Unit) {
+                    delay(1200)
+                    showSplash = false
+                }
+                var environment by remember { mutableStateOf<SessionEnvironment?>(initialEnvironment) }
+                val sessionsState = remember {
+                    mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
+                }
+                val importableSessions = remember {
+                    mutableStateListOf<Session>().apply { addAll(initialImportSessions) }
+                }
+                val coroutineScope = rememberCoroutineScope()
+                val context = this@MainActivity
+                var showSessionSelection by remember { mutableStateOf(true) }
 
-                    fun refreshSessions() {
-                        sessionsState.clear()
-                        sessionsState.addAll(sessionRepository.list())
-                    }
+                fun refreshSessions() {
+                    sessionsState.clear()
+                    sessionsState.addAll(sessionRepository.list())
+                }
 
-                    fun refreshRemoteSessionsList() {
-                        coroutineScope.launch {
-                            try {
-                                val remoteSessions = sessionRepository.fetchRemoteSessions()
-                                importableSessions.clear()
-                                importableSessions.addAll(remoteSessions)
-                            } catch (e: Exception) {
-                                Log.w("MainActivity", "Failed to refresh remote sessions", e)
-                            }
+                fun refreshRemoteSessionsList() {
+                    coroutineScope.launch {
+                        try {
+                            val remoteSessions = sessionRepository.fetchRemoteSessions()
+                            importableSessions.clear()
+                            importableSessions.addAll(remoteSessions)
+                        } catch (e: Exception) {
+                            Log.w("MainActivity", "Failed to refresh remote sessions", e)
                         }
                     }
+                }
 
-                    val switchSession: (Session) -> Unit = { targetSession ->
-                        sessionRepository.setSelected(targetSession.id)
-                        val resolved = sessionRepository.getSelected() ?: targetSession
-                        environment = createSessionEnvironment(resolved, firestore)
-                    }
+                val switchSession: (Session) -> Unit = { targetSession ->
+                    sessionRepository.setSelected(targetSession.id)
+                    val resolved = sessionRepository.getSelected() ?: targetSession
+                    environment = createSessionEnvironment(resolved, firestore)
+                }
 
-                    val addSession: () -> Unit = {
-                        coroutineScope.launch {
-                            val wasEmpty = sessionsState.isEmpty()
-                            val name = context.generateSessionName(sessionsState.map { it.name })
-                            val created = sessionRepository.create(name, SessionSettings())
-                            if (wasEmpty) {
-                                migrateLegacyMemosToDefaultSession(created.id)
-                                migrateLegacyNotesCollection(firestore, created.id)
-                            }
-                            refreshSessions()
-                            switchSession(created)
-                            try {
-                                sessionRepository.syncSessionRemote(created)
-                            } catch (e: Exception) {
-                                Log.w("MainActivity", "Failed to sync session ${created.id} to Firestore", e)
-                            }
+                val openSession: (Session) -> Unit = { targetSession ->
+                    showSessionSelection = false
+                    switchSession(targetSession)
+                }
+
+                val addSession: () -> Unit = {
+                    coroutineScope.launch {
+                        val wasEmpty = sessionsState.isEmpty()
+                        val name = context.generateSessionName(sessionsState.map { it.name })
+                        val created = sessionRepository.create(name, SessionSettings())
+                        if (wasEmpty) {
+                            migrateLegacyMemosToDefaultSession(created.id)
+                            migrateLegacyNotesCollection(firestore, created.id)
                         }
-                    }
-
-                    val renameSession: (Session, String) -> Unit = { session, newName ->
-                        coroutineScope.launch {
-                            val trimmed = newName.trim()
-                            if (trimmed.isEmpty() || trimmed == session.name) {
-                                return@launch
-                            }
-                            val persisted = sessionRepository.update(session.copy(name = trimmed))
-                            refreshSessions()
-                            if (environment?.session?.id == persisted.id) {
-                                environment = environment?.copy(session = persisted)
-                            }
-                            try {
-                                sessionRepository.syncSessionRemote(persisted)
-                            } catch (e: Exception) {
-                                Log.w(
-                                    "MainActivity",
-                                    "Failed to sync session ${persisted.id} to Firestore",
-                                    e,
-                                )
-                            }
-                        }
-                    }
-
-                    fun handleDeleteSession(
-                        session: Session,
-                        deleteAction: (String) -> Boolean,
-                    ) {
-                        val wasSelected = environment?.session?.id == session.id
-                        if (deleteAction(session.id)) {
-                            refreshSessions()
-                            val currentSelected = sessionRepository.getSelected()
-                            when {
-                                currentSelected != null && wasSelected -> switchSession(currentSelected)
-                                currentSelected != null -> Unit
-                                sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
-                                else -> {
-                                    environment = null
-                                }
-                            }
-                        }
-                    }
-
-                    val deleteSessionLocal: (Session) -> Unit = { session ->
-                        handleDeleteSession(session) { id -> sessionRepository.deleteLocal(id) }
-                    }
-
-                    val deleteSessionRemote: (Session) -> Unit = { session ->
-                        handleDeleteSession(session) { id -> sessionRepository.deleteLocalAndRemote(id) }
-                    }
-
-                    val importRemoteSession: (Session) -> Unit = { remoteSession ->
-                        val imported = sessionRepository.importRemoteSession(remoteSession)
                         refreshSessions()
-                        switchSession(imported)
-                        importableSessions.removeAll { it.id == imported.id }
-                        refreshRemoteSessionsList()
+                        openSession(created)
+                        try {
+                            sessionRepository.syncSessionRemote(created)
+                        } catch (e: Exception) {
+                            Log.w("MainActivity", "Failed to sync session ${created.id} to Firestore", e)
+                        }
                     }
+                }
 
-                    DianaTheme {
-                        if (showSplash) {
-                            SplashScreen(modifier = Modifier.fillMaxSize())
-                        } else {
-                            val activeEnvironment = environment
-                            if (activeEnvironment != null) {
-                                DianaApp(
-                                    session = activeEnvironment.session,
-                                    sessions = sessionsState,
-                                    importableSessions = importableSessions,
-                                    repository = activeEnvironment.noteRepository,
-                                    memoRepository = activeEnvironment.memoRepository,
-                                    tagCatalogRepository = activeEnvironment.tagCatalogRepository,
-                                    onUpdateSession = { updatedSession ->
-                                        val persisted = sessionRepository.update(updatedSession)
-                                        environment = environment?.copy(session = persisted)
-                                        refreshSessions()
-                                        coroutineScope.launch {
-                                            try {
-                                                sessionRepository.syncSessionRemote(persisted)
-                                            } catch (e: Exception) {
-                                                Log.w(
-                                                    "MainActivity",
-                                                    "Failed to sync session ${persisted.id} to Firestore",
-                                                    e,
-                                                )
-                                            }
-                                        }
-                                        persisted
-                                    },
-                                    onSwitchSession = switchSession,
-                                    onAddSession = addSession,
-                                    onRenameSession = renameSession,
-                                    onDeleteSessionLocal = deleteSessionLocal,
-                                    onDeleteSessionRemote = deleteSessionRemote,
-                                    onImportRemoteSession = importRemoteSession,
-                                    onRefreshImportableSessions = { refreshRemoteSessionsList() },
-                                )
-                            } else {
-                                NoActiveSessionScreen(
-                                    sessions = sessionsState,
-                                    importableSessions = importableSessions,
-                                    onSwitchSession = switchSession,
-                                    onAddSession = addSession,
-                                    onRenameSession = renameSession,
-                                    onDeleteSessionLocal = deleteSessionLocal,
-                                    onDeleteSessionRemote = deleteSessionRemote,
-                                    onImportRemoteSession = importRemoteSession,
-                                    onRefreshImportableSessions = { refreshRemoteSessionsList() },
-                                )
+                val renameSession: (Session, String) -> Unit = { session, newName ->
+                    coroutineScope.launch {
+                        val trimmed = newName.trim()
+                        if (trimmed.isEmpty() || trimmed == session.name) {
+                            return@launch
+                        }
+                        val persisted = sessionRepository.update(session.copy(name = trimmed))
+                        refreshSessions()
+                        if (environment?.session?.id == persisted.id) {
+                            environment = environment?.copy(session = persisted)
+                        }
+                        try {
+                            sessionRepository.syncSessionRemote(persisted)
+                        } catch (e: Exception) {
+                            Log.w(
+                                "MainActivity",
+                                "Failed to sync session ${persisted.id} to Firestore",
+                                e,
+                            )
+                        }
+                    }
+                }
+
+                fun handleDeleteSession(
+                    session: Session,
+                    deleteAction: (String) -> Boolean,
+                ) {
+                    val wasSelected = environment?.session?.id == session.id
+                    if (deleteAction(session.id)) {
+                        refreshSessions()
+                        val currentSelected = sessionRepository.getSelected()
+                        when {
+                            currentSelected != null && wasSelected -> switchSession(currentSelected)
+                            currentSelected != null -> Unit
+                            sessionsState.isNotEmpty() -> switchSession(sessionsState.first())
+                            else -> {
+                                environment = null
                             }
                         }
                     }
                 }
+
+                val deleteSessionLocal: (Session) -> Unit = { session ->
+                    handleDeleteSession(session) { id -> sessionRepository.deleteLocal(id) }
+                }
+
+                val deleteSessionRemote: (Session) -> Unit = { session ->
+                    handleDeleteSession(session) { id -> sessionRepository.deleteLocalAndRemote(id) }
+                }
+
+                val importRemoteSession: (Session) -> Unit = { remoteSession ->
+                    val imported = sessionRepository.importRemoteSession(remoteSession)
+                    refreshSessions()
+                    openSession(imported)
+                    importableSessions.removeAll { it.id == imported.id }
+                    refreshRemoteSessionsList()
+                }
+
+                DianaTheme {
+                    if (showSplash) {
+                        SplashScreen(modifier = Modifier.fillMaxSize())
+                    } else {
+                        val activeEnvironment = environment
+                        if (showSessionSelection || activeEnvironment == null) {
+                            SessionSelectionScreen(
+                                sessions = sessionsState,
+                                selectedSessionId = activeEnvironment?.session?.id,
+                                importableSessions = importableSessions,
+                                onSelectSession = openSession,
+                                onAddSession = addSession,
+                                onRenameSession = renameSession,
+                                onDeleteSessionLocal = deleteSessionLocal,
+                                onDeleteSessionRemote = deleteSessionRemote,
+                                onImportRemoteSession = importRemoteSession,
+                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                            )
+                        } else {
+                            DianaApp(
+                                session = activeEnvironment.session,
+                                sessions = sessionsState,
+                                importableSessions = importableSessions,
+                                repository = activeEnvironment.noteRepository,
+                                memoRepository = activeEnvironment.memoRepository,
+                                tagCatalogRepository = activeEnvironment.tagCatalogRepository,
+                                onUpdateSession = { updatedSession ->
+                                    val persisted = sessionRepository.update(updatedSession)
+                                    environment = environment?.copy(session = persisted)
+                                    refreshSessions()
+                                    coroutineScope.launch {
+                                        try {
+                                            sessionRepository.syncSessionRemote(persisted)
+                                        } catch (e: Exception) {
+                                            Log.w(
+                                                "MainActivity",
+                                                "Failed to sync session ${persisted.id} to Firestore",
+                                                e,
+                                            )
+                                        }
+                                    }
+                                    persisted
+                                },
+                                onSwitchSession = switchSession,
+                                onAddSession = addSession,
+                                onRenameSession = renameSession,
+                                onDeleteSessionLocal = deleteSessionLocal,
+                                onDeleteSessionRemote = deleteSessionRemote,
+                                onImportRemoteSession = importRemoteSession,
+                                onRefreshImportableSessions = { refreshRemoteSessionsList() },
+                                onNavigateBackToSessionList = { showSessionSelection = true },
+                            )
+                        }
+                    }
+                }
             }
-//        }
         }
+
+    }
 
     private fun ensureInitialSession(sessionRepository: SessionRepository): SessionInitialization {
         val selected = sessionRepository.getSelected()
@@ -490,11 +506,13 @@ private data class SessionInitialization(
     val createdDefaultSession: Boolean,
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NoActiveSessionScreen(
+private fun SessionSelectionScreen(
     sessions: List<Session>,
+    selectedSessionId: String?,
     importableSessions: List<Session>,
-    onSwitchSession: (Session) -> Unit,
+    onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
     onDeleteSessionLocal: (Session) -> Unit,
@@ -503,43 +521,88 @@ private fun NoActiveSessionScreen(
     onRefreshImportableSessions: () -> Unit,
 ) {
     var showImportDialog by remember { mutableStateOf(false) }
-    val message = stringResource(R.string.no_active_session_message)
+    val title = stringResource(R.string.session_list_title)
     val addLabel = stringResource(R.string.add_session)
+    val importLabel = stringResource(R.string.import_remote_sessions)
+    val emptyTitle = stringResource(R.string.no_sessions)
+    val emptyMessage = stringResource(R.string.no_active_session_message)
 
     Scaffold(
         topBar = {
-            SessionTabBar(
-                sessions = sessions,
-                selectedSessionId = null,
-                importableSessions = importableSessions,
-                onSelectSession = onSwitchSession,
-                onAddSession = onAddSession,
-                onRenameSession = onRenameSession,
-                onDeleteSessionLocal = onDeleteSessionLocal,
-                onDeleteSessionRemote = onDeleteSessionRemote,
-                onShowImportSessions = {
-                    onRefreshImportableSessions()
-                    showImportDialog = true
-                },
+            CenterAlignedTopAppBar(
+                title = { Text(title) },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            onRefreshImportableSessions()
+                            showImportDialog = true
+                        }
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (importableSessions.isNotEmpty()) {
+                                    val badgeText = if (importableSessions.size > 99) {
+                                        "99+"
+                                    } else {
+                                        importableSessions.size.toString()
+                                    }
+                                    Badge { Text(badgeText) }
+                                }
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Filled.Cloud, contentDescription = importLabel)
+                        }
+                    }
+                    IconButton(onClick = onAddSession) {
+                        Icon(imageVector = Icons.Filled.Add, contentDescription = addLabel)
+                    }
+                }
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onAddSession) {
-                Text(addLabel)
+        if (sessions.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = emptyTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = emptyMessage,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onAddSession) {
+                    Text(addLabel)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(sessions, key = { it.id }) { session ->
+                    SessionListItem(
+                        session = session,
+                        selected = session.id == selectedSessionId,
+                        onSelect = { onSelectSession(session) },
+                        onRename = { newName -> onRenameSession(session, newName) },
+                        onDeleteLocal = { onDeleteSessionLocal(session) },
+                        onDeleteRemote = { onDeleteSessionRemote(session) },
+                    )
+                }
             }
         }
     }
@@ -552,6 +615,122 @@ private fun NoActiveSessionScreen(
                 onImportRemoteSession(remoteSession)
                 showImportDialog = false
             }
+        )
+    }
+}
+
+@Composable
+private fun SessionListItem(
+    session: Session,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onRename: (String) -> Unit,
+    onDeleteLocal: () -> Unit,
+    onDeleteRemote: () -> Unit,
+) {
+    val renameLabel = stringResource(R.string.rename_session)
+    val deleteLabel = stringResource(R.string.delete_session)
+    val actionsLabel = stringResource(R.string.session_actions)
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = containerColor,
+        contentColor = contentColor,
+        tonalElevation = if (selected) 6.dp else 1.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onSelect)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = session.name,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = actionsLabel)
+            }
+        }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(renameLabel) },
+                onClick = {
+                    menuExpanded = false
+                    showRenameDialog = true
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(deleteLabel) },
+                onClick = {
+                    menuExpanded = false
+                    showDeleteDialog = true
+                }
+            )
+        }
+    }
+
+    if (showRenameDialog) {
+        var renameText by remember { mutableStateOf(session.name) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text(renameLabel) },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text(stringResource(R.string.session_name)) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = renameText.trim()
+                        if (trimmed.isNotEmpty()) {
+                            showRenameDialog = false
+                            onRename(trimmed)
+                        }
+                    },
+                    enabled = renameText.trim().isNotEmpty()
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+    if (showDeleteDialog) {
+        DeleteSessionDialog(
+            sessionName = session.name,
+            onDismiss = { showDeleteDialog = false },
+            onDeleteLocal = onDeleteLocal,
+            onDeleteRemote = onDeleteRemote
         )
     }
 }
@@ -572,10 +751,19 @@ fun DianaApp(
     onDeleteSessionRemote: (Session) -> Unit,
     onImportRemoteSession: (Session) -> Unit,
     onRefreshImportableSessions: () -> Unit,
+    onNavigateBackToSessionList: () -> Unit,
 ) {
     var screen by remember { mutableStateOf<Screen>(Screen.List) }
     val logs = remember { mutableStateListOf<String>() }
     var showImportDialog by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (screen != Screen.List) {
+            screen = Screen.List
+        } else {
+            onNavigateBackToSessionList()
+        }
+    }
 
     fun addLog(message: String) {
         logs.add(message)
@@ -816,6 +1004,7 @@ fun DianaApp(
                     onRefreshImportableSessions()
                     showImportDialog = true
                 },
+                onNavigateBack = onNavigateBackToSessionList,
             )
         },
         snackbarHost = {
@@ -1090,6 +1279,7 @@ private fun SessionTabBar(
     onDeleteSessionLocal: (Session) -> Unit,
     onDeleteSessionRemote: (Session) -> Unit,
     onShowImportSessions: () -> Unit,
+    onNavigateBack: (() -> Unit)? = null,
 ) {
     val addLabel = stringResource(R.string.add_session)
     val emptyLabel = stringResource(R.string.no_sessions)
@@ -1101,6 +1291,11 @@ private fun SessionTabBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        if (onNavigateBack != null) {
+            IconButton(onClick = onNavigateBack) {
+                Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+            }
+        }
         if (sessions.isEmpty()) {
             Box(
                 modifier = Modifier

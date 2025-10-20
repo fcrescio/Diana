@@ -66,6 +66,7 @@
     <string name="session_actions">Session options</string>
     <string name="no_sessions">No sessions</string>
     <string name="no_active_session_message">Create a session to get started.</string>
+    <string name="session_list_title">Sessions</string>
     <string name="delete_memo_title">Delete memo</string>
     <string name="delete_memo_message">Are you sure you want to delete this memo?</string>
     <string name="import_remote_sessions">Import sessions</string>
