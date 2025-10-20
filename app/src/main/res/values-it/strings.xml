@@ -44,6 +44,7 @@
     <string name="session_actions">Opzioni sessione</string>
     <string name="no_sessions">Nessuna sessione</string>
     <string name="no_active_session_message">Crea una sessione per iniziare.</string>
+    <string name="session_list_title">Sessioni</string>
     <string name="delete_memo_title">Elimina memo</string>
     <string name="delete_memo_message">Sei sicuro di voler eliminare questo memo?</string>
     <string name="manage_tags">Gestisci tag</string>
