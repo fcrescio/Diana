@@ -1117,105 +1117,106 @@ fun DianaApp(
         }
 
         when (screen) {
-            Screen.List -> NotesListScreen(
-                todoItems,
-                appointments,
-                thoughtNotes,
-                thoughtDocument,
-                currentTagCatalog,
-                locale,
-                logs,
-                processTodos,
-                processAppointments,
-                processThoughts,
-                modifier = contentModifier,
-                onTodoCheckedChange = { item, checked ->
-                    val newStatus = if (checked) "done" else "not_started"
-                    todoItems = todoItems.map {
-                        if (it.id == item.id) it.copy(status = newStatus) else it
-                    }
-                    persistNotes(todoItems)
-                },
-                onTodoEdit = { updated ->
-                    todoItems = todoItems.map { existing ->
-                        if (existing.id == updated.id) updated else existing
-                    }
-                    persistNotes(todoItems)
-                },
-                onTodoDelete = { item ->
-                    todoItems = todoItems.filterNot { it.id == item.id }
-                    scope.launch {
-                        repository.deleteTodoItem(item.id)
-                        syncProcessor()
-                    }
-                },
-                onAppointmentDelete = { appt ->
-                    appointments = appointments.filterNot { it == appt }
-                    scope.launch {
-                        repository.deleteAppointment(appt.text, appt.datetime, appt.location)
-                        syncProcessor()
-                    }
-                },
-                onTodoMove = { item ->
-                    pendingMoveRequest = SessionItemMoveRequest.Todo(item)
-                },
-                onAppointmentMove = { appt ->
-                    pendingMoveRequest = SessionItemMoveRequest.Appointment(appt)
-                }
-            )
-            val moveRequest = pendingMoveRequest
-            if (moveRequest != null) {
-                val targetSessions = sessions.filter { it.id != session.id }
-                MoveSessionItemDialog(
-                    itemLabel = when (moveRequest) {
-                        is SessionItemMoveRequest.Todo -> moveRequest.item.text
-                        is SessionItemMoveRequest.Appointment -> moveRequest.item.text
-                    },
-                    sessions = targetSessions,
-                    onDismiss = { pendingMoveRequest = null },
-                    onMove = { target ->
-                        when (moveRequest) {
-                            is SessionItemMoveRequest.Todo -> {
-                                val item = moveRequest.item
-                                todoItems = todoItems.filterNot { it.id == item.id }
-                                scope.launch {
-                                    repository.deleteTodoItem(item.id)
-                                    createNoteRepository(target).saveNotes(
-                                        listOf(
-                                            StructuredNote.ToDo(
-                                                text = item.text,
-                                                status = item.status,
-                                                tagIds = item.tagIds,
-                                                tagLabels = item.tagLabels,
-                                                dueDate = item.dueDate,
-                                                eventDate = item.eventDate,
-                                            )
-                                        )
-                                    )
-                                    syncProcessor()
-                                }
-                            }
-                            is SessionItemMoveRequest.Appointment -> {
-                                val appt = moveRequest.item
-                                appointments = appointments.filterNot { it == appt }
-                                scope.launch {
-                                    repository.deleteAppointment(appt.text, appt.datetime, appt.location)
-                                    createNoteRepository(target).saveNotes(
-                                        listOf(
-                                            StructuredNote.Event(
-                                                appt.text,
-                                                appt.datetime,
-                                                appt.location,
-                                            )
-                                        )
-                                    )
-                                    syncProcessor()
-                                }
-                            }
+            Screen.List -> {
+                NotesListScreen(
+                    todoItems,
+                    appointments,
+                    thoughtNotes,
+                    thoughtDocument,
+                    currentTagCatalog,
+                    locale,
+                    logs,
+                    processTodos,
+                    processAppointments,
+                    processThoughts,
+                    modifier = contentModifier,
+                    onTodoCheckedChange = { item, checked ->
+                        val newStatus = if (checked) "done" else "not_started"
+                        todoItems = todoItems.map {
+                            if (it.id == item.id) it.copy(status = newStatus) else it
                         }
-                        pendingMoveRequest = null
+                        persistNotes(todoItems)
+                    },
+                    onTodoEdit = { updated ->
+                        todoItems = todoItems.map { existing ->
+                            if (existing.id == updated.id) updated else existing
+                        }
+                        persistNotes(todoItems)
+                    },
+                    onTodoDelete = { item ->
+                        todoItems = todoItems.filterNot { it.id == item.id }
+                        scope.launch {
+                            repository.deleteTodoItem(item.id)
+                            syncProcessor()
+                        }
+                    },
+                    onAppointmentDelete = { appt ->
+                        appointments = appointments.filterNot { it == appt }
+                        scope.launch {
+                            repository.deleteAppointment(appt.text, appt.datetime, appt.location)
+                            syncProcessor()
+                        }
+                    },
+                    onTodoMove = { item ->
+                        pendingMoveRequest = SessionItemMoveRequest.Todo(item)
+                    },
+                    onAppointmentMove = { appt ->
+                        pendingMoveRequest = SessionItemMoveRequest.Appointment(appt)
                     }
                 )
+                pendingMoveRequest?.let { moveRequest ->
+                    val targetSessions = sessions.filter { it.id != session.id }
+                    MoveSessionItemDialog(
+                        itemLabel = when (moveRequest) {
+                            is SessionItemMoveRequest.Todo -> moveRequest.item.text
+                            is SessionItemMoveRequest.Appointment -> moveRequest.item.text
+                        },
+                        sessions = targetSessions,
+                        onDismiss = { pendingMoveRequest = null },
+                        onMove = { target ->
+                            when (moveRequest) {
+                                is SessionItemMoveRequest.Todo -> {
+                                    val item = moveRequest.item
+                                    todoItems = todoItems.filterNot { it.id == item.id }
+                                    scope.launch {
+                                        repository.deleteTodoItem(item.id)
+                                        createNoteRepository(target).saveNotes(
+                                            listOf(
+                                                StructuredNote.ToDo(
+                                                    text = item.text,
+                                                    status = item.status,
+                                                    tagIds = item.tagIds,
+                                                    tagLabels = item.tagLabels,
+                                                    dueDate = item.dueDate,
+                                                    eventDate = item.eventDate,
+                                                )
+                                            )
+                                        )
+                                        syncProcessor()
+                                    }
+                                }
+                                is SessionItemMoveRequest.Appointment -> {
+                                    val appt = moveRequest.item
+                                    appointments = appointments.filterNot { it == appt }
+                                    scope.launch {
+                                        repository.deleteAppointment(appt.text, appt.datetime, appt.location)
+                                        createNoteRepository(target).saveNotes(
+                                            listOf(
+                                                StructuredNote.Event(
+                                                    appt.text,
+                                                    appt.datetime,
+                                                    appt.location,
+                                                )
+                                            )
+                                        )
+                                        syncProcessor()
+                                    }
+                                }
+                            }
+                            pendingMoveRequest = null
+                        }
+                    )
+                }
             }
             Screen.Archive -> MemoArchiveScreen(
                 memoRepository = memoRepository,
@@ -1514,7 +1515,7 @@ private fun SessionTab(
 
 private sealed interface SessionItemMoveRequest {
     data class Todo(val item: TodoItem) : SessionItemMoveRequest
-    data class Appointment(val item: Appointment) : SessionItemMoveRequest
+    data class Appointment(val item: li.crescio.penates.diana.llm.Appointment) : SessionItemMoveRequest
 }
 
 @Composable
