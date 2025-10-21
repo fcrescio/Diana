@@ -348,6 +348,9 @@ class MainActivity : ComponentActivity() {
                                 repository = activeEnvironment.noteRepository,
                                 memoRepository = activeEnvironment.memoRepository,
                                 tagCatalogRepository = activeEnvironment.tagCatalogRepository,
+                                createNoteRepository = { target ->
+                                    createSessionEnvironment(target, firestore).noteRepository
+                                },
                                 onUpdateSession = { updatedSession ->
                                     val persisted = sessionRepository.update(updatedSession)
                                     environment = environment?.copy(session = persisted)
@@ -743,6 +746,7 @@ fun DianaApp(
     repository: NoteRepository,
     memoRepository: MemoRepository,
     tagCatalogRepository: TagCatalogRepository,
+    createNoteRepository: (Session) -> NoteRepository,
     onUpdateSession: (Session) -> Session,
     onSwitchSession: (Session) -> Unit,
     onAddSession: () -> Unit,
@@ -777,6 +781,7 @@ fun DianaApp(
     var appointments by remember(session.id) { mutableStateOf(listOf<Appointment>()) }
     var thoughtNotes by remember(session.id) { mutableStateOf(listOf<StructuredNote>()) }
     var thoughtDocument by remember(session.id) { mutableStateOf<ThoughtDocument?>(null) }
+    var pendingMoveRequest by remember(session.id) { mutableStateOf<SessionItemMoveRequest?>(null) }
     val scope = rememberCoroutineScope()
     val player: Player = remember { AndroidPlayer() }
     val logRecorded = stringResource(R.string.log_recorded_memo)
@@ -1150,8 +1155,68 @@ fun DianaApp(
                         repository.deleteAppointment(appt.text, appt.datetime, appt.location)
                         syncProcessor()
                     }
+                },
+                onTodoMove = { item ->
+                    pendingMoveRequest = SessionItemMoveRequest.Todo(item)
+                },
+                onAppointmentMove = { appt ->
+                    pendingMoveRequest = SessionItemMoveRequest.Appointment(appt)
                 }
             )
+            val moveRequest = pendingMoveRequest
+            if (moveRequest != null) {
+                val targetSessions = sessions.filter { it.id != session.id }
+                MoveSessionItemDialog(
+                    itemLabel = when (moveRequest) {
+                        is SessionItemMoveRequest.Todo -> moveRequest.item.text
+                        is SessionItemMoveRequest.Appointment -> moveRequest.item.text
+                    },
+                    sessions = targetSessions,
+                    onDismiss = { pendingMoveRequest = null },
+                    onMove = { target ->
+                        when (moveRequest) {
+                            is SessionItemMoveRequest.Todo -> {
+                                val item = moveRequest.item
+                                todoItems = todoItems.filterNot { it.id == item.id }
+                                scope.launch {
+                                    repository.deleteTodoItem(item.id)
+                                    createNoteRepository(target).saveNotes(
+                                        listOf(
+                                            StructuredNote.ToDo(
+                                                text = item.text,
+                                                status = item.status,
+                                                tagIds = item.tagIds,
+                                                tagLabels = item.tagLabels,
+                                                dueDate = item.dueDate,
+                                                eventDate = item.eventDate,
+                                            )
+                                        )
+                                    )
+                                    syncProcessor()
+                                }
+                            }
+                            is SessionItemMoveRequest.Appointment -> {
+                                val appt = moveRequest.item
+                                appointments = appointments.filterNot { it == appt }
+                                scope.launch {
+                                    repository.deleteAppointment(appt.text, appt.datetime, appt.location)
+                                    createNoteRepository(target).saveNotes(
+                                        listOf(
+                                            StructuredNote.Event(
+                                                appt.text,
+                                                appt.datetime,
+                                                appt.location,
+                                            )
+                                        )
+                                    )
+                                    syncProcessor()
+                                }
+                            }
+                        }
+                        pendingMoveRequest = null
+                    }
+                )
+            }
             Screen.Archive -> MemoArchiveScreen(
                 memoRepository = memoRepository,
                 player = player,
@@ -1445,6 +1510,54 @@ private fun SessionTab(
             onDeleteRemote = onDeleteRemote
         )
     }
+}
+
+private sealed interface SessionItemMoveRequest {
+    data class Todo(val item: TodoItem) : SessionItemMoveRequest
+    data class Appointment(val item: Appointment) : SessionItemMoveRequest
+}
+
+@Composable
+private fun MoveSessionItemDialog(
+    itemLabel: String,
+    sessions: List<Session>,
+    onDismiss: () -> Unit,
+    onMove: (Session) -> Unit,
+) {
+    val title = stringResource(R.string.move_item_title)
+    val description = stringResource(R.string.move_item_message, itemLabel)
+    val noSessionsMessage = stringResource(R.string.move_item_no_sessions)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            if (sessions.isEmpty()) {
+                Text(noSessionsMessage)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(description)
+                    sessions.forEach { target ->
+                        TextButton(
+                            onClick = { onMove(target) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(target.name)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (sessions.isEmpty()) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+            }
+        },
+        dismissButton = {
+            if (sessions.isNotEmpty()) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            }
+        }
+    )
 }
 
 @Composable

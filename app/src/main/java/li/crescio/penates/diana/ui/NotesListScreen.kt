@@ -417,6 +417,8 @@ fun NotesListScreen(
     onTodoEdit: (TodoItem) -> Unit,
     onTodoDelete: (TodoItem) -> Unit,
     onAppointmentDelete: (Appointment) -> Unit,
+    onTodoMove: (TodoItem) -> Unit,
+    onAppointmentMove: (Appointment) -> Unit,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -522,6 +524,13 @@ fun NotesListScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.move_to)) },
+                                                onClick = {
+                                                    expanded = false
+                                                    onTodoMove(item)
+                                                }
+                                            )
+                                            DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.delete)) },
                                                 onClick = {
                                                     expanded = false
@@ -612,6 +621,13 @@ fun NotesListScreen(
                                                 expanded = expanded,
                                                 onDismissRequest = { expanded = false }
                                             ) {
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.move_to)) },
+                                                    onClick = {
+                                                        expanded = false
+                                                        onAppointmentMove(appt)
+                                                    }
+                                                )
                                                 DropdownMenuItem(
                                                     text = { Text(stringResource(R.string.delete)) },
                                                     onClick = {
