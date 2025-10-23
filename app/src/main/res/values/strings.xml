@@ -58,6 +58,8 @@
     <string name="add_session">Add session</string>
     <string name="session_default_name">Session %1$d</string>
     <string name="rename_session">Rename session</string>
+    <string name="edit_summary_group">Edit summary group</string>
+    <string name="session_summary_group">Summary group</string>
     <string name="delete_session">Delete session</string>
     <string name="session_name">Session name</string>
     <string name="delete_session_title">Delete session</string>
