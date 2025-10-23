@@ -287,6 +287,29 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val updateSummaryGroup: (Session, String) -> Unit = { session, newSummaryGroup ->
+                    coroutineScope.launch {
+                        val trimmed = newSummaryGroup.trim()
+                        if (trimmed == session.summaryGroup) {
+                            return@launch
+                        }
+                        val persisted = sessionRepository.update(session.copy(summaryGroup = trimmed))
+                        refreshSessions()
+                        if (environment?.session?.id == persisted.id) {
+                            environment = environment?.copy(session = persisted)
+                        }
+                        try {
+                            sessionRepository.syncSessionRemote(persisted)
+                        } catch (e: Exception) {
+                            Log.w(
+                                "MainActivity",
+                                "Failed to sync session ${persisted.id} to Firestore",
+                                e,
+                            )
+                        }
+                    }
+                }
+
                 fun handleDeleteSession(
                     session: Session,
                     deleteAction: (String) -> Boolean,
@@ -335,6 +358,7 @@ class MainActivity : ComponentActivity() {
                                 onSelectSession = openSession,
                                 onAddSession = addSession,
                                 onRenameSession = renameSession,
+                                onUpdateSummaryGroup = updateSummaryGroup,
                                 onDeleteSessionLocal = deleteSessionLocal,
                                 onDeleteSessionRemote = deleteSessionRemote,
                                 onImportRemoteSession = importRemoteSession,
@@ -371,6 +395,7 @@ class MainActivity : ComponentActivity() {
                                 onSwitchSession = switchSession,
                                 onAddSession = addSession,
                                 onRenameSession = renameSession,
+                                onUpdateSummaryGroup = updateSummaryGroup,
                                 onDeleteSessionLocal = deleteSessionLocal,
                                 onDeleteSessionRemote = deleteSessionRemote,
                                 onImportRemoteSession = importRemoteSession,
@@ -518,6 +543,7 @@ private fun SessionSelectionScreen(
     onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
+    onUpdateSummaryGroup: (Session, String) -> Unit,
     onDeleteSessionLocal: (Session) -> Unit,
     onDeleteSessionRemote: (Session) -> Unit,
     onImportRemoteSession: (Session) -> Unit,
@@ -602,6 +628,7 @@ private fun SessionSelectionScreen(
                         selected = session.id == selectedSessionId,
                         onSelect = { onSelectSession(session) },
                         onRename = { newName -> onRenameSession(session, newName) },
+                        onUpdateSummaryGroup = { newGroup -> onUpdateSummaryGroup(session, newGroup) },
                         onDeleteLocal = { onDeleteSessionLocal(session) },
                         onDeleteRemote = { onDeleteSessionRemote(session) },
                     )
@@ -628,15 +655,19 @@ private fun SessionListItem(
     selected: Boolean,
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
+    onUpdateSummaryGroup: (String) -> Unit,
     onDeleteLocal: () -> Unit,
     onDeleteRemote: () -> Unit,
 ) {
     val renameLabel = stringResource(R.string.rename_session)
+    val editSummaryGroupLabel = stringResource(R.string.edit_summary_group)
+    val summaryGroupLabel = stringResource(R.string.session_summary_group)
     val deleteLabel = stringResource(R.string.delete_session)
     val actionsLabel = stringResource(R.string.session_actions)
     var menuExpanded by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showSummaryGroupDialog by remember { mutableStateOf(false) }
 
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.secondaryContainer
@@ -685,6 +716,13 @@ private fun SessionListItem(
                 }
             )
             DropdownMenuItem(
+                text = { Text(editSummaryGroupLabel) },
+                onClick = {
+                    menuExpanded = false
+                    showSummaryGroupDialog = true
+                }
+            )
+            DropdownMenuItem(
                 text = { Text(deleteLabel) },
                 onClick = {
                     menuExpanded = false
@@ -728,6 +766,36 @@ private fun SessionListItem(
             }
         )
     }
+    if (showSummaryGroupDialog) {
+        var summaryGroupText by remember { mutableStateOf(session.summaryGroup) }
+        AlertDialog(
+            onDismissRequest = { showSummaryGroupDialog = false },
+            title = { Text(editSummaryGroupLabel) },
+            text = {
+                OutlinedTextField(
+                    value = summaryGroupText,
+                    onValueChange = { summaryGroupText = it },
+                    label = { Text(summaryGroupLabel) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSummaryGroupDialog = false
+                        onUpdateSummaryGroup(summaryGroupText.trim())
+                    }
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSummaryGroupDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
     if (showDeleteDialog) {
         DeleteSessionDialog(
             sessionName = session.name,
@@ -751,6 +819,7 @@ fun DianaApp(
     onSwitchSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
+    onUpdateSummaryGroup: (Session, String) -> Unit,
     onDeleteSessionLocal: (Session) -> Unit,
     onDeleteSessionRemote: (Session) -> Unit,
     onImportRemoteSession: (Session) -> Unit,
@@ -1003,6 +1072,7 @@ fun DianaApp(
                 onSelectSession = onSwitchSession,
                 onAddSession = onAddSession,
                 onRenameSession = onRenameSession,
+                onUpdateSummaryGroup = onUpdateSummaryGroup,
                 onDeleteSessionLocal = onDeleteSessionLocal,
                 onDeleteSessionRemote = onDeleteSessionRemote,
                 onShowImportSessions = {
@@ -1342,6 +1412,7 @@ private fun SessionTabBar(
     onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
+    onUpdateSummaryGroup: (Session, String) -> Unit,
     onDeleteSessionLocal: (Session) -> Unit,
     onDeleteSessionRemote: (Session) -> Unit,
     onShowImportSessions: () -> Unit,
@@ -1386,6 +1457,7 @@ private fun SessionTabBar(
                         selected = index == selectedIndex,
                         onSelect = { onSelectSession(session) },
                         onRename = { newName -> onRenameSession(session, newName) },
+                        onUpdateSummaryGroup = { newGroup -> onUpdateSummaryGroup(session, newGroup) },
                         onDeleteLocal = { onDeleteSessionLocal(session) },
                         onDeleteRemote = { onDeleteSessionRemote(session) },
                     )
@@ -1416,15 +1488,19 @@ private fun SessionTab(
     selected: Boolean,
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
+    onUpdateSummaryGroup: (String) -> Unit,
     onDeleteLocal: () -> Unit,
     onDeleteRemote: () -> Unit,
 ) {
     val renameLabel = stringResource(R.string.rename_session)
+    val editSummaryGroupLabel = stringResource(R.string.edit_summary_group)
+    val summaryGroupLabel = stringResource(R.string.session_summary_group)
     val deleteLabel = stringResource(R.string.delete_session)
     val actionsLabel = stringResource(R.string.session_actions)
     var menuExpanded by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showSummaryGroupDialog by remember { mutableStateOf(false) }
     Tab(selected = selected, onClick = onSelect) {
         Box {
             Row(
@@ -1457,6 +1533,13 @@ private fun SessionTab(
                     onClick = {
                         menuExpanded = false
                         showRenameDialog = true
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(editSummaryGroupLabel) },
+                    onClick = {
+                        menuExpanded = false
+                        showSummaryGroupDialog = true
                     }
                 )
                 DropdownMenuItem(
@@ -1498,6 +1581,36 @@ private fun SessionTab(
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+    if (showSummaryGroupDialog) {
+        var summaryGroupText by remember { mutableStateOf(session.summaryGroup) }
+        AlertDialog(
+            onDismissRequest = { showSummaryGroupDialog = false },
+            title = { Text(editSummaryGroupLabel) },
+            text = {
+                OutlinedTextField(
+                    value = summaryGroupText,
+                    onValueChange = { summaryGroupText = it },
+                    label = { Text(summaryGroupLabel) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSummaryGroupDialog = false
+                        onUpdateSummaryGroup(summaryGroupText.trim())
+                    }
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSummaryGroupDialog = false }) {
                     Text(stringResource(R.string.cancel))
                 }
             }

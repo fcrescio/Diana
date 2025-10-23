@@ -52,6 +52,7 @@ class SessionRepositoryTest {
         assertEquals(1, recorded!!.size)
         val payload = recorded.first()
         assertEquals("New Session", payload["name"])
+        assertEquals("", payload["summaryGroup"])
         assertEquals(
             mapOf(
                 "processTodos" to false,
@@ -84,6 +85,7 @@ class SessionRepositoryTest {
         assertEquals(1, recorded!!.size)
         val payload = recorded.single()
         assertEquals("Renamed", payload["name"])
+        assertEquals("", payload["summaryGroup"])
         assertEquals(
             mapOf(
                 "processTodos" to false,
@@ -105,7 +107,8 @@ class SessionRepositoryTest {
         val remote = Session(
             id = "remote-${UUID.randomUUID()}",
             name = "Remote Session",
-            settings = SessionSettings(processTodos = true, processAppointments = false, processThoughts = true, model = "remote-model")
+            settings = SessionSettings(processTodos = true, processAppointments = false, processThoughts = true, model = "remote-model"),
+            summaryGroup = "Remote Group",
         )
 
         val persisted = repository.importRemoteSession(remote)
@@ -115,6 +118,7 @@ class SessionRepositoryTest {
         assertEquals(1, recorded!!.size)
         val payload = recorded.single()
         assertEquals("Remote Session", payload["name"])
+        assertEquals("Remote Group", payload["summaryGroup"])
         assertEquals(
             mapOf(
                 "processTodos" to true,

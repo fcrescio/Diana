@@ -180,6 +180,7 @@ class SessionRepository(
         obj.put("id", id)
         obj.put("name", name)
         obj.put("settings", settings.toJson())
+        obj.put("summaryGroup", summaryGroup)
         return obj
     }
 
@@ -218,7 +219,8 @@ class SessionRepository(
             val name = obj.optString("name", "")
             if (id.isBlank() || name.isBlank()) continue
             val settings = parseSettings(obj.optJSONObject("settings"))
-            parsedSessions += Session(id, name, settings)
+            val summaryGroup = obj.optString("summaryGroup", "")
+            parsedSessions += Session(id, name, settings, summaryGroup)
         }
         val selectedIdRaw = json.optString("selectedSessionId", "")
         val selectedId = if (selectedIdRaw.isBlank()) {
@@ -357,6 +359,7 @@ class SessionRepository(
         val data = mutableMapOf<String, Any?>(
             "name" to session.name,
             "settings" to session.settings.toMap(),
+            "summaryGroup" to session.summaryGroup,
             "selectedSessionId" to selectedId,
             "selected" to (selectedId == session.id),
         )
@@ -435,7 +438,8 @@ class SessionRepository(
         return try {
             val settingsData = document.get("settings") as? Map<*, *>
             val settings = parseRemoteSettings(settingsData)
-            Session(document.id, name, settings)
+            val summaryGroup = document.getString("summaryGroup").orEmpty()
+            Session(document.id, name, settings, summaryGroup)
         } catch (e: Exception) {
             logger.warn(
                 "session_remote_parse_failed",

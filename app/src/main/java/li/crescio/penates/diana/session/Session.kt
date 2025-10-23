@@ -7,6 +7,7 @@ data class Session(
     val id: String,
     val name: String,
     val settings: SessionSettings = SessionSettings(),
+    val summaryGroup: String = "",
 )
 
 /**
