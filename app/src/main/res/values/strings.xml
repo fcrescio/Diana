@@ -43,6 +43,8 @@
     <string name="todo_text_label">Task</string>
     <string name="todo_due_date_label">Due date</string>
     <string name="todo_event_date_label">Event date</string>
+    <string name="todo_date_picker_clear">Clear date</string>
+    <string name="todo_date_picker_select">Select</string>
     <string name="todo_tag_ids_label">Tag IDs (comma separated)</string>
     <string name="todo_tag_labels_label">Tag labels (comma separated)</string>
     <string name="delete_appointment_title">Delete appointment</string>
