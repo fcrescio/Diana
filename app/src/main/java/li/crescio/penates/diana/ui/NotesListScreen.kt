@@ -4,12 +4,15 @@ import android.text.method.LinkMovementMethod
 import android.view.ViewGroup
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,8 +37,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.ZoneId
 import java.util.LinkedHashSet
 import java.util.Locale
 
@@ -704,19 +709,17 @@ private fun TodoEditDialog(
                     label = { Text(stringResource(R.string.todo_text_label)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                DatePickerField(
+                    label = stringResource(R.string.todo_due_date_label),
                     value = dueDate,
                     onValueChange = { dueDate = it },
-                    label = { Text(stringResource(R.string.todo_due_date_label)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
                 )
-                OutlinedTextField(
+                DatePickerField(
+                    label = stringResource(R.string.todo_event_date_label),
                     value = eventDate,
                     onValueChange = { eventDate = it },
-                    label = { Text(stringResource(R.string.todo_event_date_label)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
                 )
                 OutlinedTextField(
                     value = tagIds,
@@ -755,6 +758,95 @@ private fun TodoEditDialog(
             }
         },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    val formatter = remember { DateTimeFormatter.ISO_LOCAL_DATE }
+    val parsedDate = remember(value) { parseDate(value) }
+    val displayValue = remember(parsedDate, value) {
+        parsedDate?.format(formatter) ?: value
+    }
+    val initialSelectedDateMillis = remember(parsedDate) {
+        parsedDate?.atStartOfDay(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+    }
+
+    OutlinedTextField(
+        value = displayValue,
+        onValueChange = {},
+        label = { Text(label) },
+        modifier = modifier
+            .clickable { showDatePicker = true },
+        singleLine = true,
+        readOnly = true,
+        trailingIcon = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (value.isNotBlank()) {
+                    IconButton(onClick = { onValueChange("") }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = stringResource(R.string.todo_date_picker_clear),
+                        )
+                    }
+                }
+                IconButton(onClick = { showDatePicker = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.CalendarMonth,
+                        contentDescription = label,
+                    )
+                }
+            }
+        },
+    )
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialSelectedDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedDate = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                            onValueChange(selectedDate.format(formatter))
+                        }
+                        showDatePicker = false
+                    },
+                    enabled = datePickerState.selectedDateMillis != null,
+                ) {
+                    Text(stringResource(R.string.todo_date_picker_select))
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (value.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                onValueChange("")
+                                showDatePicker = false
+                            }
+                        ) {
+                            Text(stringResource(R.string.todo_date_picker_clear))
+                        }
+                    }
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 private fun parseTagInput(value: String): List<String> {
