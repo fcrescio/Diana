@@ -462,6 +462,7 @@ fun NotesListScreen(
                                             onTodoCheckedChange(item, checked)
                                         }
                                     )
+                                    val statusLabel = todoStatusLabel(item.status)
                                     Column(
                                         modifier = Modifier
                                             .padding(start = 8.dp)
@@ -494,6 +495,15 @@ fun NotesListScreen(
                                                 textDecoration = decoration
                                             )
                                         }
+                                        Text(
+                                            text = stringResource(
+                                                R.string.todo_status_display,
+                                                statusLabel,
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = textColor,
+                                            textDecoration = decoration,
+                                        )
                                         val tags = remember(item, tagCatalog, locale) {
                                             item.resolvedTags(tagCatalog, locale)
                                         }
@@ -686,6 +696,7 @@ fun NotesListScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TodoEditDialog(
     item: TodoItem,
@@ -697,6 +708,11 @@ private fun TodoEditDialog(
     var eventDate by remember(item) { mutableStateOf(item.eventDate) }
     var tagIds by remember(item) { mutableStateOf(item.tagIds.joinToString(", ")) }
     var tagLabels by remember(item) { mutableStateOf(item.tagLabels.joinToString(", ")) }
+    var status by remember(item) { mutableStateOf(item.status) }
+    var statusExpanded by remember { mutableStateOf(false) }
+    val statusOptions = remember {
+        listOf("not_started", "in_progress", "done", "cancelled", "not_required")
+    }
     val canSave = text.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -709,6 +725,37 @@ private fun TodoEditDialog(
                     label = { Text(stringResource(R.string.todo_text_label)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
+                ExposedDropdownMenuBox(
+                    expanded = statusExpanded,
+                    onExpandedChange = { statusExpanded = !statusExpanded },
+                ) {
+                    OutlinedTextField(
+                        value = todoStatusLabel(status),
+                        onValueChange = {},
+                        label = { Text(stringResource(R.string.todo_status_label)) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        readOnly = true,
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded)
+                        },
+                    )
+                    ExposedDropdownMenu(
+                        expanded = statusExpanded,
+                        onDismissRequest = { statusExpanded = false },
+                    ) {
+                        statusOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(todoStatusLabel(option)) },
+                                onClick = {
+                                    status = option
+                                    statusExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
                 DatePickerField(
                     label = stringResource(R.string.todo_due_date_label),
                     value = dueDate,
@@ -740,6 +787,7 @@ private fun TodoEditDialog(
                 onClick = {
                     val updated = item.copy(
                         text = text.trim(),
+                        status = status,
                         dueDate = dueDate.trim(),
                         eventDate = eventDate.trim(),
                         tagIds = parseTagInput(tagIds),
@@ -758,6 +806,18 @@ private fun TodoEditDialog(
             }
         },
     )
+}
+
+@Composable
+private fun todoStatusLabel(status: String): String {
+    return when (status) {
+        "not_started" -> stringResource(R.string.todo_status_not_started)
+        "in_progress" -> stringResource(R.string.todo_status_in_progress)
+        "done" -> stringResource(R.string.todo_status_done)
+        "cancelled" -> stringResource(R.string.todo_status_cancelled)
+        "not_required" -> stringResource(R.string.todo_status_not_required)
+        else -> status.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
