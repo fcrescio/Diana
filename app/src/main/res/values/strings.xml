@@ -59,6 +59,7 @@
     <string name="process_todo">Process to-dos</string>
     <string name="process_appointments">Process appointments</string>
     <string name="process_thoughts">Process thoughts</string>
+    <string name="show_tags">Show tags</string>
     <string name="llm_model">LLM model</string>
     <string name="editing_session">Editing context for %1$s</string>
     <string name="model_mistral_nemo">Mistral Nemo (default)</string>
@@ -84,7 +85,7 @@
     <string name="import_remote_sessions">Import sessions</string>
     <string name="import_remote_sessions_title">Import remote sessions</string>
     <string name="no_remote_sessions">No remote sessions available.</string>
-    <string name="remote_session_settings">To-dos: %1$s • Appointments: %2$s • Thoughts: %3$s • Model: %4$s</string>
+    <string name="remote_session_settings">To-dos: %1$s • Appointments: %2$s • Thoughts: %3$s • Tags: %4$s • Model: %5$s</string>
     <string name="setting_enabled">On</string>
     <string name="setting_disabled">Off</string>
     <string name="remote_session_model_default">Default</string>

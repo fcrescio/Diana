@@ -58,6 +58,7 @@ private fun ThoughtsSection(
     thoughtDocument: ThoughtDocument?,
     tagCatalog: TagCatalog?,
     locale: Locale,
+    showTags: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -111,7 +112,7 @@ private fun ThoughtsSection(
                         if (text.isNotBlank()) {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text(text)
-                                if (tags.isNotEmpty()) {
+                                if (showTags && tags.isNotEmpty()) {
                                     FlowRow(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -130,7 +131,7 @@ private fun ThoughtsSection(
                     }
                 }
             }
-            if (tagIndex.allTags.isNotEmpty()) {
+            if (showTags && tagIndex.allTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.thoughts_tags_label),
@@ -174,12 +175,12 @@ private fun ThoughtsSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
-            if (tagIndex.allTags.isNotEmpty()) {
+            if (showTags && tagIndex.allTags.isNotEmpty()) {
                 Text(
                     text = stringResource(R.string.thoughts_tags_label),
                     style = MaterialTheme.typography.labelLarge,
                 )
-            TagRow(tags = tagIndex.allTags, onTagClick = { filter = it.label })
+                TagRow(tags = tagIndex.allTags, onTagClick = { filter = it.label })
             }
             return
         }
@@ -216,7 +217,7 @@ private fun ThoughtsSection(
         val tagsToShow = selectedSection?.let { tagIndex.tagsFor(it) }
             .takeUnless { it.isNullOrEmpty() }
             ?: tagIndex.allTags
-        if (tagsToShow.isNotEmpty()) {
+        if (showTags && tagsToShow.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.thoughts_tags_label),
                 style = MaterialTheme.typography.labelLarge,
@@ -417,6 +418,7 @@ fun NotesListScreen(
     showTodos: Boolean,
     showAppointments: Boolean,
     showThoughts: Boolean,
+    showTags: Boolean = false,
     modifier: Modifier = Modifier,
     onTodoCheckedChange: (TodoItem, Boolean) -> Unit,
     onTodoEdit: (TodoItem) -> Unit,
@@ -507,19 +509,21 @@ fun NotesListScreen(
                                         val tags = remember(item, tagCatalog, locale) {
                                             item.resolvedTags(tagCatalog, locale)
                                         }
-                                        Row {
-                                            tags.forEach { tag ->
-                                                AssistChip(
-                                                    onClick = {},
-                                                    label = {
-                                                        Text(
-                                                            tag.label,
-                                                            color = textColor,
-                                                            textDecoration = decoration
-                                                        )
-                                                    },
-                                                    modifier = Modifier.padding(end = 4.dp)
-                                                )
+                                        if (showTags && tags.isNotEmpty()) {
+                                            Row {
+                                                tags.forEach { tag ->
+                                                    AssistChip(
+                                                        onClick = {},
+                                                        label = {
+                                                            Text(
+                                                                tag.label,
+                                                                color = textColor,
+                                                                textDecoration = decoration
+                                                            )
+                                                        },
+                                                        modifier = Modifier.padding(end = 4.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -686,6 +690,7 @@ fun NotesListScreen(
                         thoughtDocument = thoughtDocument,
                         tagCatalog = tagCatalog,
                         locale = locale,
+                        showTags = showTags,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                 }

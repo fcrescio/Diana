@@ -899,6 +899,7 @@ fun DianaApp(
     var processTodos by remember(session.id) { mutableStateOf(activeSession.settings.processTodos) }
     var processAppointments by remember(session.id) { mutableStateOf(activeSession.settings.processAppointments) }
     var processThoughts by remember(session.id) { mutableStateOf(activeSession.settings.processThoughts) }
+    var showTags by remember(session.id) { mutableStateOf(activeSession.settings.showTags) }
     var selectedModel by remember(session.id) { mutableStateOf(sanitizedModel) }
     val processor = remember(session.id) {
         MemoProcessor(
@@ -924,6 +925,7 @@ fun DianaApp(
         processTodos = sanitizedSession.settings.processTodos
         processAppointments = sanitizedSession.settings.processAppointments
         processThoughts = sanitizedSession.settings.processThoughts
+        showTags = sanitizedSession.settings.showTags
         selectedModel = sanitized
         processor.model = sanitized
     }
@@ -942,6 +944,7 @@ fun DianaApp(
         processTodos = finalSettings.processTodos
         processAppointments = finalSettings.processAppointments
         processThoughts = finalSettings.processThoughts
+        showTags = finalSettings.showTags
         selectedModel = finalSettings.model
         return finalSettings
     }
@@ -1199,6 +1202,7 @@ fun DianaApp(
                     processTodos,
                     processAppointments,
                     processThoughts,
+                    showTags,
                     modifier = contentModifier,
                     onTodoCheckedChange = { item, checked ->
                         val newStatus = if (checked) "done" else "not_started"
@@ -1336,6 +1340,9 @@ fun DianaApp(
                 },
                 onProcessThoughtsChange = { enabled ->
                     persistSettings { it.copy(processThoughts = enabled) }
+                },
+                onShowTagsChange = { enabled ->
+                    persistSettings { it.copy(showTags = enabled) }
                 },
                 onModelChange = { model ->
                     val persisted = persistSettings { it.copy(model = model) }
@@ -1783,6 +1790,7 @@ private fun ImportSessionsDialog(
                                     if (session.settings.processTodos) enabledLabel else disabledLabel,
                                     if (session.settings.processAppointments) enabledLabel else disabledLabel,
                                     if (session.settings.processThoughts) enabledLabel else disabledLabel,
+                                    if (session.settings.showTags) enabledLabel else disabledLabel,
                                     session.settings.model.ifBlank { defaultModelLabel },
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,

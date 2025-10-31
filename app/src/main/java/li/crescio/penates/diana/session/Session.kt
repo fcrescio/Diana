@@ -17,5 +17,6 @@ data class SessionSettings(
     val processTodos: Boolean = true,
     val processAppointments: Boolean = true,
     val processThoughts: Boolean = true,
+    val showTags: Boolean = false,
     val model: String = "",
 )

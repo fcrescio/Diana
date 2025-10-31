@@ -44,7 +44,13 @@ class SessionRepositoryTest {
 
         val session = repository.create(
             name = "New Session",
-            settings = SessionSettings(processTodos = false, processAppointments = true, processThoughts = false, model = "gpt-4o")
+            settings = SessionSettings(
+                processTodos = false,
+                processAppointments = true,
+                processThoughts = false,
+                showTags = true,
+                model = "gpt-4o",
+            )
         )
 
         val recorded = capturedSets[session.id]
@@ -58,6 +64,7 @@ class SessionRepositoryTest {
                 "processTodos" to false,
                 "processAppointments" to true,
                 "processThoughts" to false,
+                "showTags" to true,
                 "model" to "gpt-4o",
             ),
             payload["settings"]
@@ -77,7 +84,13 @@ class SessionRepositoryTest {
         repository.setSelected(original.id)
         capturedSets[original.id]?.clear()
 
-        val updatedSettings = SessionSettings(processTodos = false, processAppointments = false, processThoughts = true, model = "sonoma")
+        val updatedSettings = SessionSettings(
+            processTodos = false,
+            processAppointments = false,
+            processThoughts = true,
+            showTags = false,
+            model = "sonoma",
+        )
         val updated = repository.update(original.copy(name = "Renamed", settings = updatedSettings))
 
         val recorded = capturedSets[original.id]
@@ -91,6 +104,7 @@ class SessionRepositoryTest {
                 "processTodos" to false,
                 "processAppointments" to false,
                 "processThoughts" to true,
+                "showTags" to false,
                 "model" to "sonoma",
             ),
             payload["settings"]
@@ -107,7 +121,13 @@ class SessionRepositoryTest {
         val remote = Session(
             id = "remote-${UUID.randomUUID()}",
             name = "Remote Session",
-            settings = SessionSettings(processTodos = true, processAppointments = false, processThoughts = true, model = "remote-model"),
+            settings = SessionSettings(
+                processTodos = true,
+                processAppointments = false,
+                processThoughts = true,
+                showTags = true,
+                model = "remote-model",
+            ),
             summaryGroup = "Remote Group",
         )
 
@@ -124,6 +144,7 @@ class SessionRepositoryTest {
                 "processTodos" to true,
                 "processAppointments" to false,
                 "processThoughts" to true,
+                "showTags" to true,
                 "model" to "remote-model",
             ),
             payload["settings"]

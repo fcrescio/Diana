@@ -189,6 +189,7 @@ class SessionRepository(
         obj.put("processTodos", processTodos)
         obj.put("processAppointments", processAppointments)
         obj.put("processThoughts", processThoughts)
+        obj.put("showTags", showTags)
         obj.put("model", model)
         return obj
     }
@@ -244,6 +245,7 @@ class SessionRepository(
             processTodos = obj.optBooleanWithFallback("processTodos", "saveTodos", true),
             processAppointments = obj.optBooleanWithFallback("processAppointments", "saveAppointments", true),
             processThoughts = obj.optBooleanWithFallback("processThoughts", "saveThoughts", true),
+            showTags = obj.optBoolean("showTags", false),
             model = obj.optString("model", ""),
         )
     }
@@ -458,6 +460,7 @@ class SessionRepository(
             processTodos = parseBoolean(data["processTodos"] ?: data["saveTodos"], true),
             processAppointments = parseBoolean(data["processAppointments"] ?: data["saveAppointments"], true),
             processThoughts = parseBoolean(data["processThoughts"] ?: data["saveThoughts"], true),
+            showTags = parseBoolean(data["showTags"], false),
             model = data["model"]?.toString()?.trim().orEmpty(),
         )
     }
@@ -481,6 +484,7 @@ class SessionRepository(
         "processTodos" to processTodos,
         "processAppointments" to processAppointments,
         "processThoughts" to processThoughts,
+        "showTags" to showTags,
         "model" to model,
     )
 
