@@ -61,7 +61,13 @@ class SessionImportFlowTest {
         val remote = Session(
             id = "remote-123",
             name = "Remote",
-            settings = SessionSettings(processTodos = false, processAppointments = true, processThoughts = true, model = "remote-model")
+            settings = SessionSettings(
+                processTodos = false,
+                processAppointments = true,
+                processThoughts = true,
+                showTags = true,
+                model = "remote-model",
+            )
         )
         importableSessions += remote
 

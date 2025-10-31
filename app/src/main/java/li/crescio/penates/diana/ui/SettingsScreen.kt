@@ -35,6 +35,7 @@ fun SettingsScreen(
     onProcessTodosChange: (Boolean) -> Unit,
     onProcessAppointmentsChange: (Boolean) -> Unit,
     onProcessThoughtsChange: (Boolean) -> Unit,
+    onShowTagsChange: (Boolean) -> Unit,
     onModelChange: (String) -> Unit,
     onManageTags: () -> Unit,
     onClearTodos: () -> Unit,
@@ -97,6 +98,15 @@ fun SettingsScreen(
                 Text(stringResource(R.string.process_thoughts))
                 Spacer(modifier = Modifier.weight(1f))
                 Switch(checked = settings.processThoughts, onCheckedChange = onProcessThoughtsChange)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.show_tags))
+                Spacer(modifier = Modifier.weight(1f))
+                Switch(checked = settings.showTags, onCheckedChange = onShowTagsChange)
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(stringResource(R.string.llm_model))
