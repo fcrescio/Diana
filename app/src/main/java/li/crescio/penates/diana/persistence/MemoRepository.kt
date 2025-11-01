@@ -52,6 +52,7 @@ class MemoRepository(private val file: File) {
         val obj = JSONObject()
         obj.put("text", memo.text)
         memo.audioPath?.let { obj.put("audioPath", it) }
+        obj.put("createdAt", memo.createdAt)
         return obj.toString()
     }
 
@@ -61,7 +62,8 @@ class MemoRepository(private val file: File) {
             val text = obj.getString("text")
             val audioPath = obj.optString("audioPath", null)
             val path = if (audioPath.isNullOrEmpty()) null else audioPath
-            Memo(text, path)
+            val createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+            Memo(text, path, createdAt)
         } catch (_: Exception) {
             null
         }

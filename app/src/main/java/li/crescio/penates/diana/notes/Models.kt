@@ -12,7 +12,8 @@ data class Transcript(val text: String)
  * original audio that produced it. */
 data class Memo(
     val text: String,
-    val audioPath: String? = null
+    val audioPath: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
 )
 
 sealed class StructuredNote(open val createdAt: Long) {

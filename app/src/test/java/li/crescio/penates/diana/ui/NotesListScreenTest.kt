@@ -47,7 +47,9 @@ class NotesListScreenTest {
                 onTodoCheckedChange = { _, _ -> },
                 onTodoEdit = {},
                 onTodoDelete = {},
-                onAppointmentDelete = {}
+                onAppointmentDelete = {},
+                onTodoMove = {},
+                onAppointmentMove = {},
             )
         }
 
@@ -104,6 +106,8 @@ class NotesListScreenTest {
                 onTodoEdit = {},
                 onTodoDelete = {},
                 onAppointmentDelete = {},
+                onTodoMove = {},
+                onAppointmentMove = {},
             )
         }
 
