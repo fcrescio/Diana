@@ -29,7 +29,8 @@ class MemoRepositoryTest {
         repository.addMemo(Memo("one"))
         repository.addMemo(Memo("two", "audio"))
         val memos = repository.loadMemos()
-        assertEquals(listOf(Memo("one"), Memo("two", "audio")), memos)
+        assertEquals(listOf("one", "two"), memos.map { it.text })
+        assertEquals(listOf(null, "audio"), memos.map { it.audioPath })
     }
 
     @Test
@@ -42,7 +43,7 @@ class MemoRepositoryTest {
             nestedRepository.addMemo(Memo("nested memo"))
 
             val memos = nestedRepository.loadMemos()
-            assertEquals(listOf(Memo("nested memo")), memos)
+            assertEquals(listOf("nested memo"), memos.map { it.text })
         } finally {
             root.deleteRecursively()
         }

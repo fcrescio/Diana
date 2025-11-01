@@ -9,6 +9,8 @@
     <string name="back">Indietro</string>
     <string name="play">Riproduci</string>
     <string name="reprocess">Rielabora</string>
+    <string name="read_text">Leggi testo</string>
+    <string name="more_actions">Altre azioni</string>
     <string name="settings">Impostazioni</string>
     <string name="finish_recording">Termina registrazione</string>
     <string name="save">Salva</string>
