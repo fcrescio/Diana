@@ -116,4 +116,12 @@
     <string name="move_item_title">Move item</string>
     <string name="move_item_message">Select a session to move &quot;%1$s&quot; to.</string>
     <string name="move_item_no_sessions">No other sessions are available.</string>
+    <string name="onboarding_title">Link your device</string>
+    <string name="onboarding_body">Scan the invitation QR code from the administrator to sign in and sync your data.</string>
+    <string name="onboarding_scan_button">Scan invite QR</string>
+    <string name="onboarding_permission_denied">Camera permission is required to scan the invite. Enable it in Settings.</string>
+    <string name="onboarding_scanner_instruction">Align the QR code within the frame</string>
+    <string name="onboarding_cancel_scan">Cancel</string>
+    <string name="onboarding_validation_in_progress">Validating invite…</string>
+    <string name="onboarding_scanner_error">We couldn&#39;t read the QR code. Try again.</string>
 </resources>
