@@ -86,6 +86,9 @@ import li.crescio.penates.diana.R
 import java.util.Locale
 import java.io.File
 import java.io.IOException
+import li.crescio.penates.diana.onboarding.InviteValidationException
+import li.crescio.penates.diana.onboarding.OnboardingScreen
+import li.crescio.penates.diana.onboarding.redeemInvite
 import li.crescio.penates.diana.persistence.MemoRepository
 import li.crescio.penates.diana.session.Session
 import li.crescio.penates.diana.session.SessionRepository
@@ -95,6 +98,8 @@ import li.crescio.penates.diana.tags.TagCatalogViewModel
 import li.crescio.penates.diana.tags.toTagCatalog
 
 class MainActivity : ComponentActivity() {
+    private var applicationLaunched = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val firestore = FirebaseFirestore.getInstance()
@@ -103,39 +108,57 @@ class MainActivity : ComponentActivity() {
         val sessionInitialization = ensureInitialSession(sessionRepository)
         val permissionMessage =
             "Firestore PERMISSION_DENIED. Check security rules or authentication."
-        FirebaseAuth.getInstance().signInAnonymously()
-            .addOnSuccessListener {
-                launchApplication(
-                    canRefreshOverrides = true,
-                    authException = null,
-                    firestore = firestore,
-                    sessionRepository = sessionRepository,
-                    sessionInitialization = sessionInitialization,
-                    permissionMessage = permissionMessage,
-                )
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser != null) {
+            Log.i("MainActivity", "User already authenticated; launching application.")
+            launchApplication(
+                canRefreshOverrides = true,
+                authException = null,
+                firestore = firestore,
+                sessionRepository = sessionRepository,
+                sessionInitialization = sessionInitialization,
+                permissionMessage = permissionMessage,
+            )
+        } else {
+            setContent {
+                DianaTheme {
+                    OnboardingScreen(
+                        validateAndSignIn = { encodedPayload ->
+                            try {
+                                val result = redeemInvite(encodedPayload, firestore, auth)
+                                Log.i(
+                                    "MainActivity",
+                                    "Invite ${result.inviteId} redeemed; launching application.",
+                                )
+                            } catch (validationError: InviteValidationException) {
+                                Log.w(
+                                    "MainActivity",
+                                    "Invite validation failed: ${validationError.message}",
+                                )
+                                throw validationError
+                            } catch (error: Exception) {
+                                Log.e(
+                                    "MainActivity",
+                                    "Unexpected error while redeeming invite",
+                                    error,
+                                )
+                                throw error
+                            }
+                        },
+                        onAuthenticated = {
+                            launchApplication(
+                                canRefreshOverrides = true,
+                                authException = null,
+                                firestore = firestore,
+                                sessionRepository = sessionRepository,
+                                sessionInitialization = sessionInitialization,
+                                permissionMessage = permissionMessage,
+                            )
+                        },
+                    )
+                }
             }
-            .addOnFailureListener { exception ->
-                val authCode = (exception as? FirebaseAuthException)?.errorCode
-                val codeInfo = authCode?.let { " (code: $it)" } ?: ""
-                Log.e(
-                    "MainActivity",
-                    "Anonymous auth failed$codeInfo; remote LLM overrides will be skipped.",
-                    exception,
-                )
-                Toast.makeText(
-                    this@MainActivity,
-                    "Authentication failed; remote LLM overrides will be skipped.",
-                    Toast.LENGTH_LONG,
-                ).show()
-                launchApplication(
-                    canRefreshOverrides = false,
-                    authException = exception,
-                    firestore = firestore,
-                    sessionRepository = sessionRepository,
-                    sessionInitialization = sessionInitialization,
-                    permissionMessage = permissionMessage,
-                )
-            }
+        }
     }
 
     private fun launchApplication(
@@ -146,6 +169,11 @@ class MainActivity : ComponentActivity() {
         sessionInitialization: SessionInitialization,
         permissionMessage: String,
     ) {
+        if (applicationLaunched) {
+            Log.w("MainActivity", "launchApplication invoked more than once; ignoring subsequent call.")
+            return
+        }
+        applicationLaunched = true
         lifecycleScope.launch {
             if (canRefreshOverrides) {
                 Log.i("MainActivity", "LLM refresh: start (remote overrides enabled)")
