@@ -123,5 +123,5 @@
     <string name="onboarding_scanner_instruction">Align the QR code within the frame</string>
     <string name="onboarding_cancel_scan">Cancel</string>
     <string name="onboarding_validation_in_progress">Validating invite…</string>
-    <string name="onboarding_scanner_error">We couldn&#39;t read the QR code. Try again.</string>
+    <string name="onboarding_scanner_error">We couldn\'t read the QR code. Try again.</string>
 </resources>
