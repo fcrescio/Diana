@@ -192,8 +192,13 @@ private fun JSONObject.toMap(): Map<String, Any?> = buildMap {
     }
 }
 
-private fun JSONArray.toList(): List<Any?> = buildList(length()) { index ->
-    add(unwrapJsonValue(opt(index)))
+private fun JSONArray.toList(): List<Any?> {
+    val size = length()
+    return buildList(size) {
+        for (index in 0 until size) {
+            add(unwrapJsonValue(opt(index)))
+        }
+    }
 }
 
 private fun unwrapJsonValue(value: Any?): Any? = when (value) {
