@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -63,9 +65,11 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import li.crescio.penates.diana.llm.LlmLogger
 import li.crescio.penates.diana.llm.LlmModelCatalog
 import li.crescio.penates.diana.llm.LlmResources
@@ -96,6 +100,7 @@ import li.crescio.penates.diana.session.SessionSettings
 import li.crescio.penates.diana.tags.TagCatalogRepository
 import li.crescio.penates.diana.tags.TagCatalogViewModel
 import li.crescio.penates.diana.tags.toTagCatalog
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private var applicationLaunched = false
@@ -238,6 +243,7 @@ class MainActivity : ComponentActivity() {
                 val sessionsState = remember {
                     mutableStateListOf<Session>().apply { addAll(sessionRepository.list()) }
                 }
+                val sessionTodoProgress = remember { mutableStateMapOf<String, SessionTodoProgress>() }
                 val importableSessions = remember {
                     mutableStateListOf<Session>().apply { addAll(initialImportSessions) }
                 }
@@ -245,9 +251,42 @@ class MainActivity : ComponentActivity() {
                 val context = this@MainActivity
                 var showSessionSelection by remember { mutableStateOf(true) }
 
+                fun refreshSessionTodoProgress(sessionId: String, items: List<TodoItem>? = null) {
+                    if (items != null) {
+                        val progress = SessionTodoProgress.fromTodoItems(items)
+                        if (progress == null) {
+                            sessionTodoProgress.remove(sessionId)
+                        } else {
+                            sessionTodoProgress[sessionId] = progress
+                        }
+                        return
+                    }
+                    coroutineScope.launch {
+                        val progress = loadSessionTodoProgress(sessionId)
+                        if (progress == null) {
+                            sessionTodoProgress.remove(sessionId)
+                        } else {
+                            sessionTodoProgress[sessionId] = progress
+                        }
+                    }
+                }
+
+                fun refreshTodoProgressForSessions(sessions: List<Session>) {
+                    val validIds = sessions.map { it.id }.toSet()
+                    sessionTodoProgress.keys.retainAll(validIds)
+                    sessions.forEach { session ->
+                        refreshSessionTodoProgress(session.id)
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    refreshTodoProgressForSessions(sessionsState)
+                }
+
                 fun refreshSessions() {
                     sessionsState.clear()
                     sessionsState.addAll(sessionRepository.list())
+                    refreshTodoProgressForSessions(sessionsState)
                 }
 
                 fun refreshRemoteSessionsList() {
@@ -266,6 +305,7 @@ class MainActivity : ComponentActivity() {
                     sessionRepository.setSelected(targetSession.id)
                     val resolved = sessionRepository.getSelected() ?: targetSession
                     environment = createSessionEnvironment(resolved, firestore)
+                    refreshSessionTodoProgress(resolved.id)
                 }
 
                 val openSession: (Session) -> Unit = { targetSession ->
@@ -344,6 +384,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val wasSelected = environment?.session?.id == session.id
                     if (deleteAction(session.id)) {
+                        sessionTodoProgress.remove(session.id)
                         refreshSessions()
                         val currentSelected = sessionRepository.getSelected()
                         when {
@@ -383,6 +424,7 @@ class MainActivity : ComponentActivity() {
                                 sessions = sessionsState,
                                 selectedSessionId = activeEnvironment?.session?.id,
                                 importableSessions = importableSessions,
+                                sessionTodoProgress = sessionTodoProgress,
                                 onSelectSession = openSession,
                                 onAddSession = addSession,
                                 onRenameSession = renameSession,
@@ -402,6 +444,9 @@ class MainActivity : ComponentActivity() {
                                 tagCatalogRepository = activeEnvironment.tagCatalogRepository,
                                 createNoteRepository = { target ->
                                     createSessionEnvironment(target, firestore).noteRepository
+                                },
+                                onSessionTodosChanged = { sessionId, items ->
+                                    refreshSessionTodoProgress(sessionId, items)
                                 },
                                 onUpdateSession = { updatedSession ->
                                     val persisted = sessionRepository.update(updatedSession)
@@ -488,6 +533,43 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private suspend fun loadSessionTodoProgress(sessionId: String): SessionTodoProgress? {
+        val sessionDir = File(filesDir, "sessions/$sessionId")
+        val notesFile = File(sessionDir, "notes.txt")
+        if (!notesFile.exists()) {
+            return null
+        }
+
+        return withContext(Dispatchers.IO) {
+            if (!notesFile.exists()) {
+                return@withContext null
+            }
+            var total = 0
+            var completed = 0
+            try {
+                notesFile.useLines { lines ->
+                    lines.forEach { line ->
+                        if (line.isBlank()) return@forEach
+                        try {
+                            val obj = JSONObject(line)
+                            if (obj.optString("type") == "todo") {
+                                total++
+                                if (SessionTodoProgress.isCompletedStatus(obj.optString("status", ""))) {
+                                    completed++
+                                }
+                            }
+                        } catch (_: Exception) {
+                            // ignore malformed lines
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                return@withContext null
+            }
+            SessionTodoProgress.fromCounts(total, completed)
+        }
+    }
+
     private fun migrateLegacyMemosToDefaultSession(defaultSessionId: String) {
         val legacyMemos = File(filesDir, "memos.txt")
         val defaultSessionMemos = File(filesDir, "memos_${defaultSessionId}.txt")
@@ -550,6 +632,36 @@ private fun Context.generateSessionName(existingNames: Collection<String>): Stri
     }
 }
 
+private data class SessionTodoProgress(
+    val completed: Int,
+    val total: Int,
+) {
+    val open: Int get() = (total - completed).coerceAtLeast(0)
+    val completedFraction: Float get() = if (total <= 0) 0f else completed.toFloat() / total
+
+    companion object {
+        private val COMPLETED_STATUSES = setOf("done", "cancelled", "not_required")
+
+        fun fromCounts(total: Int, completed: Int): SessionTodoProgress? {
+            if (total <= 0) return null
+            val sanitized = completed.coerceIn(0, total)
+            return SessionTodoProgress(sanitized, total)
+        }
+
+        fun fromTodoItems(items: List<TodoItem>): SessionTodoProgress? {
+            if (items.isEmpty()) return null
+            val completed = items.count { isCompletedStatus(it.status) }
+            return fromCounts(items.size, completed)
+        }
+
+        fun isCompletedStatus(status: String): Boolean {
+            if (status.isBlank()) return false
+            val normalized = status.lowercase(Locale.getDefault())
+            return normalized in COMPLETED_STATUSES
+        }
+    }
+}
+
 private data class SessionEnvironment(
     val session: Session,
     val noteRepository: NoteRepository,
@@ -568,6 +680,7 @@ private fun SessionSelectionScreen(
     sessions: List<Session>,
     selectedSessionId: String?,
     importableSessions: List<Session>,
+    sessionTodoProgress: Map<String, SessionTodoProgress>,
     onSelectSession: (Session) -> Unit,
     onAddSession: () -> Unit,
     onRenameSession: (Session, String) -> Unit,
@@ -654,6 +767,7 @@ private fun SessionSelectionScreen(
                     SessionListItem(
                         session = session,
                         selected = session.id == selectedSessionId,
+                        todoProgress = sessionTodoProgress[session.id],
                         onSelect = { onSelectSession(session) },
                         onRename = { newName -> onRenameSession(session, newName) },
                         onUpdateSummaryGroup = { newGroup -> onUpdateSummaryGroup(session, newGroup) },
@@ -681,6 +795,7 @@ private fun SessionSelectionScreen(
 private fun SessionListItem(
     session: Session,
     selected: Boolean,
+    todoProgress: SessionTodoProgress?,
     onSelect: () -> Unit,
     onRename: (String) -> Unit,
     onUpdateSummaryGroup: (String) -> Unit,
@@ -715,21 +830,27 @@ private fun SessionListItem(
         contentColor = contentColor,
         tonalElevation = if (selected) 6.dp else 1.dp,
     ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClick = onSelect)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = session.name,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = actionsLabel)
+        Box(modifier = Modifier.fillMaxWidth()) {
+            todoProgress?.let {
+                SessionTodoProgressBackground(progress = it, selected = selected)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSelect)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = session.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(imageVector = Icons.Filled.MoreVert, contentDescription = actionsLabel)
+                }
             }
         }
         DropdownMenu(
@@ -835,6 +956,36 @@ private fun SessionListItem(
 }
 
 @Composable
+private fun SessionTodoProgressBackground(progress: SessionTodoProgress, selected: Boolean) {
+    val openAlpha = if (selected) 0.35f else 0.2f
+    val doneAlpha = if (selected) 0.45f else 0.3f
+    val openColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = openAlpha)
+    val doneColor = MaterialTheme.colorScheme.primary.copy(alpha = doneAlpha)
+
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .clip(MaterialTheme.shapes.medium)
+    ) {
+        if (progress.open > 0) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(openColor)
+            )
+        }
+        if (progress.completed > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress.completedFraction)
+                    .background(doneColor)
+            )
+        }
+    }
+}
+
+@Composable
 fun DianaApp(
     session: Session,
     sessions: List<Session>,
@@ -843,6 +994,7 @@ fun DianaApp(
     memoRepository: MemoRepository,
     tagCatalogRepository: TagCatalogRepository,
     createNoteRepository: (Session) -> NoteRepository,
+    onSessionTodosChanged: (String, List<TodoItem>?) -> Unit,
     onUpdateSession: (Session) -> Session,
     onSwitchSession: (Session) -> Unit,
     onAddSession: () -> Unit,
@@ -1017,7 +1169,7 @@ fun DianaApp(
         val eventNotes = notes.filterIsInstance<StructuredNote.Event>()
         val memoNotes = notes.filterIsInstance<StructuredNote.Memo>()
         val freeNotes = notes.filterIsInstance<StructuredNote.Free>()
-        todoItems = todoNotes.map {
+        val updatedTodos = todoNotes.map {
             TodoItem(
                 text = it.text,
                 status = it.status,
@@ -1028,9 +1180,11 @@ fun DianaApp(
                 id = it.id,
             )
         }
+        todoItems = updatedTodos
         appointments = eventNotes.map { Appointment(it.text, it.datetime, it.location) }
         thoughtDocument = repository.loadThoughtDocument()
         thoughtNotes = memoNotes + freeNotes
+        onSessionTodosChanged(session.id, updatedTodos)
         syncProcessor()
     }
 
@@ -1066,6 +1220,7 @@ fun DianaApp(
                 val saved = repository.saveSummary(summary, processTodos, processAppointments, processThoughts)
                 if (processTodos) {
                     todoItems = saved.todoItems
+                    onSessionTodosChanged(session.id, saved.todoItems)
                 }
                 if (processThoughts) {
                     thoughtDocument = saved.thoughtDocument ?: thoughtDocument
@@ -1213,6 +1368,7 @@ fun DianaApp(
                 } else emptyList()
                 val thoughtNoteList = if (includeThoughts) currentThoughts else emptyList()
                 repository.saveNotes(todoNotes + apptNotes + thoughtNoteList)
+                onSessionTodosChanged(session.id, currentTodos)
                 syncProcessor()
             }
         }
@@ -1246,9 +1402,11 @@ fun DianaApp(
                         persistNotes(todoItems)
                     },
                     onTodoDelete = { item ->
-                        todoItems = todoItems.filterNot { it.id == item.id }
+                        val updatedTodos = todoItems.filterNot { it.id == item.id }
+                        todoItems = updatedTodos
                         scope.launch {
                             repository.deleteTodoItem(item.id)
+                            onSessionTodosChanged(session.id, updatedTodos)
                             syncProcessor()
                         }
                     },
@@ -1279,9 +1437,11 @@ fun DianaApp(
                             when (moveRequest) {
                                 is SessionItemMoveRequest.Todo -> {
                                     val item = moveRequest.item
-                                    todoItems = todoItems.filterNot { it.id == item.id }
+                                    val updatedTodos = todoItems.filterNot { it.id == item.id }
+                                    todoItems = updatedTodos
                                     scope.launch {
                                         repository.deleteTodoItem(item.id)
+                                        onSessionTodosChanged(session.id, updatedTodos)
                                         createNoteRepository(target).saveNotes(
                                             listOf(
                                                 StructuredNote.ToDo(
@@ -1294,6 +1454,7 @@ fun DianaApp(
                                                 )
                                             )
                                         )
+                                        onSessionTodosChanged(target.id, null)
                                         syncProcessor()
                                     }
                                 }
@@ -1382,6 +1543,7 @@ fun DianaApp(
                         repository.clearTodos()
                         todo = ""
                         todoItems = emptyList()
+                        onSessionTodosChanged(session.id, emptyList())
                         syncProcessor()
                     }
                 },
