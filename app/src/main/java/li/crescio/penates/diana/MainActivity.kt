@@ -964,13 +964,13 @@ private fun SessionTodoProgressBackground(progress: SessionTodoProgress, selecte
 
     Box(
         modifier = Modifier
-            .matchParentSize()
+            .fillMaxSize()
             .clip(MaterialTheme.shapes.medium)
     ) {
         if (progress.open > 0) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .fillMaxSize()
                     .background(openColor)
             )
         }
