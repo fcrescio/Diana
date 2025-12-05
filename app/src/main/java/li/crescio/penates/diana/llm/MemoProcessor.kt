@@ -210,7 +210,7 @@ class MemoProcessor(
     }
 
     private fun applyTagEnumeration(aspect: String, schemaObject: JSONObject) {
-        if (aspect != prompts.todo && aspect != prompts.thoughts) {
+        if (aspect != prompts.todo) {
             return
         }
         applyTagEnumerationAtPath(
@@ -318,26 +318,8 @@ class MemoProcessor(
     }
 
     private fun thoughtPriorJson(): String {
-        val sanitizedItems = sanitizeThoughtItems(thoughtItems)
-        if (sanitizedItems != thoughtItems) {
-            thoughtItems = sanitizedItems
-        }
         val obj = JSONObject()
         obj.put("markdown_body", thoughtDocument?.markdownBody ?: thoughts)
-        val outlineSections = thoughtDocument?.outline?.sections ?: emptyList()
-        obj.put("sections", JSONArray().apply {
-            outlineSections.forEach { put(outlineSectionToJson(it)) }
-        })
-        val itemsArr = JSONArray()
-        for (item in sanitizedItems) {
-            val itemObj = JSONObject()
-            itemObj.put("text", item.text)
-            val tagsArr = JSONArray()
-            item.tagIds.forEach { tagsArr.put(it) }
-            itemObj.put("tags", tagsArr)
-            itemsArr.put(itemObj)
-        }
-        obj.put("items", itemsArr)
         return obj.toString()
     }
 
@@ -431,11 +413,8 @@ class MemoProcessor(
             check(markdownProp?.optString("type") == "string") {
                 "Schema 'updated_markdown' must be string"
             }
-            val sectionsProp = props?.optJSONObject("sections")
-            check(sectionsProp?.optString("type") == "array") { "Schema 'sections' must be array" }
             val requiredFields = (0 until (required?.length() ?: 0)).map { required!!.optString(it) }
             check(requiredFields.contains("updated_markdown")) { "Schema missing 'updated_markdown'" }
-            check(requiredFields.contains("sections")) { "Schema missing 'sections'" }
         } else {
             val updatedProp = innerSchema.optJSONObject("properties")?.optJSONObject("updated")
             check(updatedProp?.optString("type") == "string") { "Schema 'updated' must be string" }
@@ -559,31 +538,9 @@ class MemoProcessor(
                 obj.optString("updated", appointments)
                 }
                 prompts.thoughts -> {
-                    thoughtItems = (0 until (itemsArr?.length() ?: 0)).mapNotNull { idx ->
-                        val itemObj = itemsArr?.optJSONObject(idx) ?: return@mapNotNull null
-                        val text = itemObj.optString("text")
-                        val tagsArr = itemObj.optJSONArray("tags")
-                        val tags = (0 until (tagsArr?.length() ?: 0))
-                            .map { tagsArr.optString(it) }
-                            .mapNotNull { value ->
-                                val trimmed = value.trim()
-                                trimmed.takeIf { it.isNotEmpty() }
-                            }
-                        if (text.isBlank()) {
-                            null
-                        } else {
-                            sanitizeThoughtItem(
-                                Thought(
-                                    text = text,
-                                    tagIds = tags,
-                                ),
-                                "thought item '$text'",
-                            )
-                        }
-                    }
+                    thoughtItems = emptyList()
                     val updatedMarkdown = obj.optString("updated_markdown", thoughts)
-                    val sections = parseOutlineSections(obj.optJSONArray("sections"))
-                    thoughtDocument = ThoughtDocument(updatedMarkdown, ThoughtOutline(sections))
+                    thoughtDocument = ThoughtDocument(updatedMarkdown, ThoughtOutline.EMPTY)
                     updatedMarkdown
             }
             else -> obj.optString("updated", "")

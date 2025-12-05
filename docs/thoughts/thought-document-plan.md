@@ -53,6 +53,10 @@ still operate on the newline-delimited `thoughts` string and will need updates:
   local or CI batch processing. Provide a service account key, a memo via
   `--memo`/`--memo-file`, and use `--update` only after confirming the dry-run
   output.
+- **Simplified pipeline** – The LLM flow now only asks for the refreshed
+  Markdown document (`updated_markdown`). Outline metadata and structured
+  thought items are currently omitted to keep the loop focused on maintaining
+  the rolling document.
 - **Caveats** – Firestore writes reuse the mobile repository semantics (notes are
   appended rather than diffed), so run housekeeping (`clearTodos`/`clearThoughts`)
   if you need to reset a session before large migrations. The OpenRouter call

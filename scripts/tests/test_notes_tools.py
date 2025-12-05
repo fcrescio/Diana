@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import date
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from scripts.notes_tools.notes import (
     NotesTagDefinition,
     Session,
     TagMappingContext,
+    MemoSummary,
     parse_remote_note,
     parse_remote_session,
 )
@@ -131,6 +133,39 @@ class NotesToolsTest(unittest.TestCase):
         self.assertNotIn("{date}", user_message)
         self.assertNotIn("{today}", user_message)
         self.assertIn(today, user_message)
+
+    def test_thought_pipeline_updates_markdown_only(self) -> None:
+        processor = MemoProcessor(api_key="secret")
+        processor.initialize(
+            MemoSummary(
+                todo="",
+                appointments="",
+                thoughts="Existing notes",
+                todo_items=[],
+                appointment_items=[],
+                thought_items=[],
+                thought_document=None,
+            )
+        )
+
+        prior = json.loads(processor._thought_prior_json())
+        self.assertEqual({"markdown_body": "Existing notes"}, prior)
+
+        processor.prepare_requests(
+            "New memo text",
+            process_todos=False,
+            process_appointments=False,
+            process_thoughts=True,
+        )
+        processor.ingest_response(
+            processor.prompts.thoughts,
+            json.dumps({"updated_markdown": "# Notes\n\nNew entry"}),
+        )
+        updated = processor.summary()
+        self.assertEqual("# Notes\n\nNew entry", updated.thoughts)
+        self.assertEqual([], updated.thought_items)
+        self.assertIsNotNone(updated.thought_document)
+        self.assertEqual([], updated.thought_document.outline.sections)
 
 
 if __name__ == "__main__":

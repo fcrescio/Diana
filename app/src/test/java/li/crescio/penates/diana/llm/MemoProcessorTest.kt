@@ -9,7 +9,6 @@ import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.llm.TodoItem
-import li.crescio.penates.diana.llm.Thought
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -54,11 +53,8 @@ class MemoProcessorTest {
             val choices = JSONArray().put(choice)
             return JSONObject().put("choices", choices).toString()
         }
-        fun thoughtCompletion(markdown: String, sections: JSONArray, items: JSONArray): String {
-            val payload = JSONObject()
-                .put("updated_markdown", markdown)
-                .put("sections", sections)
-                .put("items", items)
+        fun thoughtCompletion(markdown: String): String {
+            val payload = JSONObject().put("updated_markdown", markdown)
             val message = JSONObject().put("content", payload.toString())
             val choice = JSONObject().put("message", message)
             val choices = JSONArray().put(choice)
@@ -69,24 +65,12 @@ class MemoProcessorTest {
             .put("text", "todo updated")
             .put("status", "not_started")
             .put("tags", JSONArray().put("tag"))
-        val thoughtSections = JSONArray().put(
-            JSONObject()
-                .put("title", "Overview")
-                .put("level", 1)
-                .put("anchor", "overview")
-                .put("children", JSONArray())
-        )
-        val thoughtItems = JSONArray().put(
-            JSONObject()
-                .put("text", "Review the new plan")
-                .put("tags", JSONArray().put("planning"))
-        )
         val thoughtMarkdown = "# Overview\n\nDetailed notes."
         server.enqueue(MockResponse().setBody(completionTodo(todoItem)).setResponseCode(200))
         server.enqueue(MockResponse().setBody(appointmentCompletion("appointments updated")).setResponseCode(200))
         server.enqueue(
             MockResponse()
-                .setBody(thoughtCompletion(thoughtMarkdown, thoughtSections, thoughtItems))
+                .setBody(thoughtCompletion(thoughtMarkdown))
                 .setResponseCode(200)
         )
         server.start()
@@ -110,12 +94,8 @@ class MemoProcessorTest {
         val document = summary.thoughtDocument
         requireNotNull(document)
         assertEquals(thoughtMarkdown, document.markdownBody)
-        assertEquals(1, document.outline.sections.size)
-        assertEquals("overview", document.outline.sections.first().anchor)
-        assertEquals(
-            listOf(Thought("Review the new plan", listOf("planning"), listOf("Planning"))),
-            summary.thoughtItems
-        )
+        assertTrue(document.outline.sections.isEmpty())
+        assertTrue(summary.thoughtItems.isEmpty())
         verify(exactly = 3) { logger.log(any(), any()) }
 
         server.shutdown()
@@ -289,8 +269,9 @@ class MemoProcessorTest {
         assertTrue(content.contains(memoText))
         val lines = content.split("\n")
         var priorIndex = -1
+        val priorLabel = "Prior structured data:"
         for ((idx, line) in lines.withIndex()) {
-            if (line.contains("Prior items (structured JSON):")) {
+            if (line.contains(priorLabel)) {
                 priorIndex = idx
                 break
             }
@@ -360,17 +341,7 @@ class MemoProcessorTest {
             val todoResponse = JSONObject()
                 .put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", todoContent.toString()))))
 
-            val thoughtPayload = JSONObject()
-                .put("updated_markdown", "## Notes\n- item")
-                .put("sections", JSONArray())
-                .put(
-                    "items",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("text", "Consider the idea")
-                            .put("tags", JSONArray().put("mystery"))
-                    ),
-                )
+            val thoughtPayload = JSONObject().put("updated_markdown", "## Notes\n- item")
             val thoughtResponse = JSONObject()
                 .put(
                     "choices",
@@ -401,11 +372,11 @@ class MemoProcessorTest {
             )
 
             assertEquals(listOf("tag"), summary.todoItems.first().tagIds)
-            assertEquals(listOf("tag"), summary.thoughtItems.first().tagIds)
-            verify(atLeast = 2) {
+            assertTrue(summary.thoughtItems.isEmpty())
+            verify(atLeast = 1) {
                 Log.w("MemoProcessor", match<String> { it.contains("Dropping disallowed tags") })
             }
-            verify(atLeast = 2) {
+            verify(atLeast = 1) {
                 Log.w("MemoProcessor", match<String> { it.contains("Mapping disallowed tags") })
             }
         } finally {
@@ -415,30 +386,11 @@ class MemoProcessorTest {
     }
 
     @Test
-    fun process_populatesThoughtDocumentOutline() = runBlocking {
+    fun process_updatesThoughtDocumentMarkdown() = runBlocking {
         System.setProperty("net.bytebuddy.experimental", "true")
 
         val server = MockWebServer()
-        val childSection = JSONObject()
-            .put("title", "Sub Topic")
-            .put("level", 2)
-            .put("anchor", "custom")
-            .put("children", JSONArray())
-        val rootSection = JSONObject()
-            .put("title", "Main Topic")
-            .put("level", 1)
-            .put("anchor", "")
-            .put("children", JSONArray().put(childSection))
-        val sections = JSONArray().put(rootSection)
-        val items = JSONArray().put(
-            JSONObject()
-                .put("text", "Reflect on sub topic")
-                .put("tags", JSONArray().put("reflection"))
-        )
-        val payload = JSONObject()
-            .put("updated_markdown", "# Main Topic\n\n## Sub Topic\n\nDetails.")
-            .put("sections", sections)
-            .put("items", items)
+        val payload = JSONObject().put("updated_markdown", "# Main Topic\n\n## Sub Topic\n\nDetails.")
         val message = JSONObject().put("content", payload.toString())
         val choice = JSONObject().put("message", message)
         val body = JSONObject().put("choices", JSONArray().put(choice)).toString()
@@ -461,12 +413,8 @@ class MemoProcessorTest {
         )
 
         val outline = requireNotNull(summary.thoughtDocument).outline
-        assertEquals(1, outline.sections.size)
-        val root = outline.sections.first()
-        assertEquals("main-topic", root.anchor)
-        assertEquals(1, root.children.size)
-        assertEquals("custom", root.children.first().anchor)
-        assertEquals(listOf("reflection"), summary.thoughtItems.first().tagIds)
+        assertTrue(outline.sections.isEmpty())
+        assertTrue(summary.thoughtItems.isEmpty())
 
         server.shutdown()
     }
@@ -594,64 +542,6 @@ class MemoProcessorTest {
         } catch (e: IOException) {
             assertEquals("Invalid JSON", e.message)
         }
-
-        server.shutdown()
-    }
-
-    @Test
-    fun process_generatesDefaultAnchorsForOutline() = runBlocking {
-        System.setProperty("net.bytebuddy.experimental", "true")
-
-        val server = MockWebServer()
-        fun thoughtCompletion(markdown: String, sections: JSONArray, items: JSONArray): String {
-            val payload = JSONObject()
-                .put("updated_markdown", markdown)
-                .put("sections", sections)
-                .put("items", items)
-            val message = JSONObject().put("content", payload.toString())
-            val choice = JSONObject().put("message", message)
-            val choices = JSONArray().put(choice)
-            return JSONObject().put("choices", choices).toString()
-        }
-
-        val sections = JSONArray().put(
-            JSONObject()
-                .put("title", "Summary")
-                .put("level", 1)
-                .put("anchor", "")
-                .put("children", JSONArray())
-        )
-        val items = JSONArray().put(
-            JSONObject()
-                .put("text", "Review findings")
-                .put("tags", JSONArray())
-        )
-        val markdown = "# Summary\n\nFindings"
-        server.enqueue(
-            MockResponse()
-                .setBody(thoughtCompletion(markdown, sections, items))
-                .setResponseCode(200)
-        )
-        server.start()
-
-        val processor = MemoProcessor(
-            apiKey = "key",
-            logger = mockk(relaxed = true),
-            locale = Locale.ENGLISH,
-            baseUrl = server.url("/").toString(),
-            client = OkHttpClient(),
-            initialTagCatalog = defaultCatalog,
-        )
-
-        val summary = processor.process(
-            Memo("summary"),
-            processTodos = false,
-            processAppointments = false,
-        )
-
-        val outline = requireNotNull(summary.thoughtDocument).outline.sections
-        assertEquals(1, outline.size)
-        assertEquals("summary", outline.first().anchor)
 
         server.shutdown()
     }

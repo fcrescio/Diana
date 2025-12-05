@@ -3,42 +3,9 @@
   "schema": {
     "type": "object",
     "properties": {
-      "updated_markdown": { "type": "string" },
-      "sections": {
-        "type": "array",
-        "items": { "$ref": "#/$defs/section" }
-      },
-      "items": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "text": { "type": "string" },
-            "tags": {
-              "type": "array",
-              "items": { "type": "string", "enum": [] }
-            }
-          },
-          "required": ["text", "tags"]
-        }
-      }
+      "updated_markdown": { "type": "string" }
     },
-    "required": ["updated_markdown", "sections", "items"],
-    "$defs": {
-      "section": {
-        "type": "object",
-        "properties": {
-          "title": { "type": "string" },
-          "level": { "type": "integer" },
-          "anchor": { "type": "string" },
-          "children": {
-            "type": "array",
-            "items": { "$ref": "#/$defs/section" }
-          }
-        },
-        "required": ["title", "level", "anchor", "children"]
-      }
-    }
+    "required": ["updated_markdown"]
   },
   "strict": true
 }

@@ -47,15 +47,9 @@ Quand {aspect} = "liste des rendez-vous" :
    - Si le mémo annule ou reprogramme un rendez-vous, décrivez explicitement le nouveau plan dans "updated" et dans l’élément correspondant.
 
 Quand {aspect} = "pensées et notes" :
-   - Combinez le document Markdown précédent et le nouveau mémo pour produire une base de connaissances soignée.
-   - `updated_markdown` : renvoyez l’INTÉGRALITÉ du document en Markdown, en conservant les sections pertinentes existantes et en intégrant les nouveaux enseignements. Utilisez des niveaux de titres cohérents (ex. `#`, `##`, `###`) et laissez une ligne vide après chaque titre et entre paragraphes/listes.
-   - Gardez une écriture synthétique et axée sur l’analyse. Résumez le mémo sans le citer mot pour mot, et répartissez les nouveautés dans les sections appropriées.
-   - `sections` : fournissez l’outline ordonné des titres. Pour chaque entrée, indiquez "title", "level" (1 = `#`), "anchor" (slug stable en kebab-case) ainsi que les "children" imbriqués qui reproduisent la hiérarchie Markdown. Réutilisez un anchor existant si le titre reste identique.
-   - `items` : renvoyez la liste organisée des pensées à afficher dans l’interface. Chaque élément doit :
-       • Contenir 1 à 2 phrases d’insight rédigées dans la langue du mémo.
-       • Inclure 1 à 3 identifiants de tag issus du catalogue approuvé.
-       • Représenter des idées nouvelles ou mises à jour déclenchées par le mémo (ne copiez pas tout le document).
-   - Faites en sorte que chaque élément corresponde clairement à une section ou un thème du Markdown.
+   - Maintenez une seule base de connaissances en Markdown en fusionnant le document précédent avec le nouveau mémo.
+   - `updated_markdown` : renvoyez le document COMPLET en Markdown après avoir intégré le mémo. Utilisez des niveaux de titres cohérents (ex. `#`, `##`, `###`) et laissez une ligne vide après chaque titre et entre paragraphes ou listes.
+   - Résumez le mémo en prose naturelle. Ne collez pas le texte brut du mémo et ne dupliquez pas des phrases déjà présentes dans le document.
 
 Contexte :
 - Données structurées précédentes :
