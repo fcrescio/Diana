@@ -329,17 +329,8 @@ class MemoProcessor:
         return json.dumps(payload, ensure_ascii=False)
 
     def _thought_prior_json(self) -> str:
-        self.thought_items = self._sanitize_thought_items(self.thought_items)
-        sections = []
-        if self.thought_document:
-            sections = [self._outline_section_to_dict(section) for section in self.thought_document.outline.sections]
         payload = {
-            "markdown_body": self.thought_document.markdown_body if self.thought_document else self.thoughts,
-            "sections": sections,
-            "items": [
-                {"text": item.text, "tags": item.tag_ids}
-                for item in self.thought_items
-            ],
+            "markdown_body": self.thought_document.markdown_body if self.thought_document else self.thoughts
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -444,27 +435,9 @@ class MemoProcessor:
         return self.appointments
 
     def _apply_thought_response(self, data: Mapping[str, Any]) -> str:
-        items: list[Thought] = []
-        entries = data.get("items")
-        if isinstance(entries, Sequence):
-            for entry in entries:
-                if not isinstance(entry, Mapping):
-                    continue
-                text = str(entry.get("text", "")).strip()
-                if not text:
-                    continue
-                tags = entry.get("tags") if isinstance(entry.get("tags"), Sequence) else []
-                items.append(
-                    Thought(
-                        text=text,
-                        tag_ids=self._sanitize_tag_ids([str(tag) for tag in tags]),
-                        created_at=0,
-                    )
-                )
         updated = str(data.get("updated_markdown", self.thoughts))
-        sections = self._parse_outline_sections(data.get("sections"))
-        self.thought_document = ThoughtDocument(updated, ThoughtOutline(sections))
-        self.thought_items = self._sanitize_thought_items(items)
+        self.thought_document = ThoughtDocument(updated, ThoughtOutline.empty())
+        self.thought_items = []
         self.thoughts = updated
         return self.thoughts
 

@@ -47,15 +47,9 @@ Quando {aspect} = "lista degli appuntamenti":
    - Se il memo annulla o riprogramma qualcosa, descrivi esplicitamente il nuovo piano sia in "updated" sia nell'elemento corrispondente.
 
 Quando {aspect} = "pensieri e note":
-   - Combina il documento Markdown precedente e il nuovo memo per creare una base di conoscenza curata.
-   - `updated_markdown`: emetti l'INTERO documento in Markdown, mantenendo le sezioni rilevanti esistenti e integrando i nuovi spunti. Usa livelli di titolo coerenti (es. `#`, `##`, `###`) e lascia una riga vuota dopo i titoli e tra paragrafi/elenco.
-   - Mantieni la scrittura focalizzata e sintetica. Riassumi il memo, non citarlo parola per parola, e inserisci il nuovo materiale nelle sezioni appropriate.
-   - `sections`: fornisci l'indice ordinato dei titoli. Per ogni sezione indica "title", "level" (1 = `#`), "anchor" (slug stabile in kebab-case) e i "children" annidati che rispecchiano la gerarchia Markdown. Riutilizza un anchor esistente quando il titolo non cambia.
-   - `items`: restituisci l'elenco curato di pensieri strutturati da mostrare nell'interfaccia. Ogni elemento deve:
-       • Contenere 1–2 frasi di insight nella lingua del memo.
-       • Includere 1–3 ID di tag dal catalogo approvato.
-       • Rappresentare idee nuove o aggiornate generate dal memo (non copiare l'intero documento).
-   - Allinea il testo di ogni elemento al contenuto Markdown in modo che la nota corrisponda chiaramente a una sezione o tema del documento.
+   - Mantieni un'unica base di conoscenza in Markdown fondendo il documento precedente con il nuovo memo.
+   - `updated_markdown`: restituisci il documento COMPLETO in Markdown dopo aver integrato il memo. Mantieni livelli di titolo coerenti (es. `#`, `##`, `###`) e lascia una riga vuota dopo i titoli e tra paragrafi o elenchi.
+   - Riassumi il memo in prosa naturale. Non incollare testo grezzo del memo e non duplicare frasi già presenti nel documento.
 
 Contesto:
 - Dati strutturati precedenti:
