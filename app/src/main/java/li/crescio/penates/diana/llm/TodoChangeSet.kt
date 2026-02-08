@@ -14,4 +14,5 @@ data class TodoChangeSet(
     val model: String,
     val promptVersion: String,
     val actions: List<TodoAction>,
+    val type: String = "apply",
 )
