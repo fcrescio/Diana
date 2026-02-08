@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.MemoSummary
 import li.crescio.penates.diana.llm.TodoChangeSet
+import li.crescio.penates.diana.llm.TodoDiff
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.notes.ThoughtDocument
@@ -17,6 +18,11 @@ import org.json.JSONObject
 import java.io.File
 import java.util.LinkedHashSet
 import java.util.Locale
+
+enum class TodoChangeSetMode {
+    APPLY,
+    UNDO,
+}
 
 class NoteRepository(
     private val firestore: FirebaseFirestore,
@@ -129,6 +135,93 @@ class NoteRepository(
             }
         } else summary.todoItems
         return summary.copy(todoItems = updatedTodos)
+    }
+
+    suspend fun applyTodoChangeSet(
+        changeSet: TodoChangeSet,
+        mode: TodoChangeSetMode = TodoChangeSetMode.APPLY,
+    ): List<StructuredNote> {
+        val tagContext = loadTagContext()
+        val existingNotes = if (notesFile.exists()) {
+            notesFile.readLines().mapNotNull { parse(it, tagContext) }
+        } else {
+            emptyList()
+        }
+        val existingTodos = existingNotes.filterIsInstance<StructuredNote.ToDo>()
+        val otherNotes = existingNotes.filterNot { it is StructuredNote.ToDo }
+        val todosByKey = LinkedHashMap<String, StructuredNote.ToDo>()
+        existingTodos.forEach { todo ->
+            todosByKey[todoStableKey(todo)] = todo
+        }
+
+        val actionsToApply = if (mode == TodoChangeSetMode.UNDO) {
+            changeSet.actions.map { invertTodoAction(it) }
+        } else {
+            changeSet.actions
+        }
+
+        val now = System.currentTimeMillis()
+        val collection = notesCollection()
+        val batch = firestore.batch()
+        for (action in actionsToApply) {
+            when (action.op) {
+                "add" -> {
+                    val item = action.after ?: continue
+                    val resolvedId = item.id.ifBlank { collection.document().id }
+                    val note = todoItemToNote(item, createdAt = now, idOverride = resolvedId)
+                    todosByKey[todoStableKey(note)] = note
+                    batch.set(collection.document(resolvedId), noteToMap(note))
+                }
+                "update" -> {
+                    val item = action.after ?: continue
+                    val beforeKey = action.before?.let { todoStableKey(it) }
+                    val afterKey = todoStableKey(item)
+                    val existing = beforeKey?.let { todosByKey[it] } ?: todosByKey[afterKey]
+                    val createdAt = existing?.createdAt ?: now
+                    val resolvedId = item.id.ifBlank { existing?.id.orEmpty() }
+                    val updatedNote = todoItemToNote(item, createdAt = createdAt, idOverride = resolvedId)
+                    if (beforeKey != null && beforeKey != afterKey) {
+                        todosByKey.remove(beforeKey)
+                    } else if (existing != null && beforeKey == null && todoStableKey(existing) != afterKey) {
+                        todosByKey.remove(todoStableKey(existing))
+                    }
+                    todosByKey[afterKey] = updatedNote
+                    if (resolvedId.isNotBlank()) {
+                        batch.set(collection.document(resolvedId), noteToMap(updatedNote))
+                    }
+                }
+                "delete" -> {
+                    val item = action.before ?: continue
+                    val key = todoStableKey(item)
+                    val existing = todosByKey.remove(key)
+                    val resolvedId = item.id.ifBlank { existing?.id.orEmpty() }
+                    if (resolvedId.isNotBlank()) {
+                        batch.delete(collection.document(resolvedId))
+                    }
+                }
+            }
+        }
+
+        val recordedChangeSet = if (mode == TodoChangeSetMode.UNDO) {
+            val inverted = changeSet.actions.map { invertTodoAction(it) }
+            val undoChangeSet = changeSet.copy(
+                changeSetId = java.util.UUID.randomUUID().toString(),
+                timestamp = now,
+                actions = inverted,
+                type = "undo",
+            )
+            normalizeChangeSet(undoChangeSet)
+        } else {
+            normalizeChangeSet(changeSet)
+        }
+
+        batch.set(todoChangeSetsCollection().document(recordedChangeSet.changeSetId), recordedChangeSet)
+        batch.commit().await()
+
+        val updatedNotes = otherNotes + todosByKey.values
+        notesFile.writeText(updatedNotes.joinToString("\n") { toJson(it) })
+        writeTodoChangeSetLocal(recordedChangeSet)
+        return updatedNotes
     }
 
     suspend fun loadNotes(): List<StructuredNote> {
@@ -329,12 +422,18 @@ class NoteRepository(
         } else {
             changeSet.changeSetId
         }
-        return if (resolvedSessionId == changeSet.sessionId && resolvedChangeSetId == changeSet.changeSetId) {
+        val resolvedType = changeSet.type.ifBlank { "apply" }
+        return if (
+            resolvedSessionId == changeSet.sessionId &&
+            resolvedChangeSetId == changeSet.changeSetId &&
+            resolvedType == changeSet.type
+        ) {
             changeSet
         } else {
             changeSet.copy(
                 sessionId = resolvedSessionId,
                 changeSetId = resolvedChangeSetId,
+                type = resolvedType,
             )
         }
     }
@@ -361,6 +460,7 @@ class NoteRepository(
         obj.put("timestamp", changeSet.timestamp)
         obj.put("model", changeSet.model)
         obj.put("promptVersion", changeSet.promptVersion)
+        obj.put("type", changeSet.type)
         val actions = JSONArray()
         changeSet.actions.forEach { action ->
             val actionObj = JSONObject()
@@ -377,6 +477,56 @@ class NoteRepository(
         }
         obj.put("actions", actions)
         return obj.toString()
+    }
+
+    private fun invertTodoAction(action: li.crescio.penates.diana.llm.TodoAction): li.crescio.penates.diana.llm.TodoAction {
+        return when (action.op) {
+            "add" -> action.after?.let { item ->
+                li.crescio.penates.diana.llm.TodoAction(op = "delete", before = item, after = null)
+            } ?: action
+            "delete" -> action.before?.let { item ->
+                li.crescio.penates.diana.llm.TodoAction(op = "add", before = null, after = item)
+            } ?: action
+            "update" -> li.crescio.penates.diana.llm.TodoAction(
+                op = "update",
+                before = action.after,
+                after = action.before,
+            )
+            else -> action
+        }
+    }
+
+    private fun todoItemToNote(
+        item: TodoItem,
+        createdAt: Long = System.currentTimeMillis(),
+        idOverride: String = item.id,
+    ): StructuredNote.ToDo {
+        return StructuredNote.ToDo(
+            text = item.text,
+            status = item.status,
+            tagIds = item.tagIds,
+            tagLabels = item.tagLabels,
+            dueDate = item.dueDate,
+            eventDate = item.eventDate,
+            createdAt = createdAt,
+            id = idOverride,
+        )
+    }
+
+    private fun todoStableKey(item: TodoItem): String = TodoDiff.stableKey(item)
+
+    private fun todoStableKey(note: StructuredNote.ToDo): String {
+        return todoStableKey(
+            TodoItem(
+                text = note.text,
+                status = note.status,
+                tagIds = note.tagIds,
+                tagLabels = note.tagLabels,
+                dueDate = note.dueDate,
+                eventDate = note.eventDate,
+                id = note.id,
+            )
+        )
     }
 
     private fun todoItemToMap(item: TodoItem): Map<String, Any> = buildMap {
