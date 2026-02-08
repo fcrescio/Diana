@@ -263,7 +263,11 @@ class MemoProcessor(
         ensureTagCatalogLoaded()
         lastTodoActions = emptyList()
         if (processTodos) {
+            val beforeTodoItems = sanitizeTodoItems(todoItems)
             todo = updateBuffer(prompts.todo, todoPriorJson(), memo.text)
+            val afterTodoItems = sanitizeTodoItems(todoItems)
+            todoItems = afterTodoItems
+            lastTodoActions = TodoDiff.diff(beforeTodoItems, afterTodoItems)
         }
         if (processAppointments) {
             appointments = updateBuffer(prompts.appointments, appointmentPriorJson(), memo.text)
@@ -535,28 +539,22 @@ class MemoProcessor(
                     if (existing != todoItems) {
                         todoItems = existing
                     }
-                    val merged = todoItems.associateBy { it.id.ifBlank { it.text } }.toMutableMap()
-                    val actions = mutableListOf<TodoAction>()
+                    val merged = todoItems.associateBy { TodoDiff.stableKey(it) }.toMutableMap()
                     for ((op, item) in updates) {
-                        val key = item.id.ifBlank { item.text }
-                        val before = merged[key]
+                        val key = TodoDiff.stableKey(item)
                         when (op) {
                             "add" -> {
-                                actions.add(TodoAction(op = op, before = null, after = item))
                                 merged[key] = item
                             }
                             "update" -> {
-                                actions.add(TodoAction(op = op, before = before, after = item))
                                 merged[key] = item
                             }
                             "delete" -> {
-                                actions.add(TodoAction(op = op, before = before, after = null))
                                 merged.remove(key)
                             }
                         }
                     }
                     todoItems = sanitizeTodoItems(merged.values.toList())
-                    lastTodoActions = actions
                     todoItems.joinToString("\n") { it.text }
                 }
                 prompts.appointments -> {
