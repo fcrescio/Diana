@@ -61,6 +61,7 @@ class MemoProcessor(
     private var thoughts: String = ""
     private var thoughtItems: List<Thought> = emptyList()
     private var thoughtDocument: ThoughtDocument? = null
+    private var lastTodoActions: List<TodoAction> = emptyList()
 
     private var tagCatalogSnapshot: TagCatalogSnapshot = TagCatalogSnapshot.EMPTY
 
@@ -257,8 +258,10 @@ class MemoProcessor(
         processTodos: Boolean = true,
         processAppointments: Boolean = true,
         processThoughts: Boolean = true,
+        sessionId: String? = null,
     ): MemoSummary {
         ensureTagCatalogLoaded()
+        lastTodoActions = emptyList()
         if (processTodos) {
             todo = updateBuffer(prompts.todo, todoPriorJson(), memo.text)
         }
@@ -268,6 +271,19 @@ class MemoProcessor(
         if (processThoughts) {
             thoughts = updateBuffer(prompts.thoughts, thoughtPriorJson(), memo.text)
         }
+        val todoChangeSet = if (processTodos && lastTodoActions.isNotEmpty()) {
+            TodoChangeSet(
+                changeSetId = java.util.UUID.randomUUID().toString(),
+                sessionId = sessionId.orEmpty(),
+                memoId = memo.createdAt.toString(),
+                timestamp = System.currentTimeMillis(),
+                model = model,
+                promptVersion = Prompts.VERSION,
+                actions = lastTodoActions,
+            )
+        } else {
+            null
+        }
         return MemoSummary(
             todo,
             appointments,
@@ -276,6 +292,7 @@ class MemoProcessor(
             appointmentItems,
             thoughtItems,
             thoughtDocument,
+            todoChangeSet = todoChangeSet,
         )
     }
 
@@ -519,12 +536,27 @@ class MemoProcessor(
                         todoItems = existing
                     }
                     val merged = todoItems.associateBy { it.id.ifBlank { it.text } }.toMutableMap()
+                    val actions = mutableListOf<TodoAction>()
                     for ((op, item) in updates) {
+                        val key = item.id.ifBlank { item.text }
+                        val before = merged[key]
                         when (op) {
-                            "add", "update" -> merged[item.id.ifBlank { item.text }] = item
+                            "add" -> {
+                                actions.add(TodoAction(op = op, before = null, after = item))
+                                merged[key] = item
+                            }
+                            "update" -> {
+                                actions.add(TodoAction(op = op, before = before, after = item))
+                                merged[key] = item
+                            }
+                            "delete" -> {
+                                actions.add(TodoAction(op = op, before = before, after = null))
+                                merged.remove(key)
+                            }
                         }
                     }
                     todoItems = sanitizeTodoItems(merged.values.toList())
+                    lastTodoActions = actions
                     todoItems.joinToString("\n") { it.text }
                 }
                 prompts.appointments -> {
@@ -627,6 +659,7 @@ data class MemoSummary(
     val appointmentItems: List<Appointment>,
     val thoughtItems: List<Thought>,
     val thoughtDocument: ThoughtDocument? = null,
+    val todoChangeSet: TodoChangeSet? = null,
 )
 
 data class Thought(
@@ -668,6 +701,8 @@ data class Prompts(
     val userTemplate: String
 ) {
     companion object {
+        const val VERSION = "v1"
+
         private fun load(locale: String, name: String): String =
             loadResource("llm/prompts/$locale/$name.txt").trim()
 

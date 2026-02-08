@@ -1199,7 +1199,13 @@ fun DianaApp(
         }
         scope.launch {
             try {
-                val summary = processor.process(memo, processTodos, processAppointments, processThoughts)
+                val summary = processor.process(
+                    memo,
+                    processTodos,
+                    processAppointments,
+                    processThoughts,
+                    sessionId = session.id,
+                )
                 if (processTodos) {
                     todo = summary.todo
                     todoItems = summary.todoItems
@@ -1217,7 +1223,13 @@ fun DianaApp(
                     }
                     thoughtDocument = summary.thoughtDocument ?: thoughtDocument
                 }
-                val saved = repository.saveSummary(summary, processTodos, processAppointments, processThoughts)
+                val saved = repository.saveSummary(
+                    summary,
+                    processTodos,
+                    processAppointments,
+                    processThoughts,
+                    changeSet = summary.todoChangeSet,
+                )
                 if (processTodos) {
                     todoItems = saved.todoItems
                     onSessionTodosChanged(session.id, saved.todoItems)
