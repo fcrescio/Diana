@@ -4,6 +4,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.MemoSummary
+import li.crescio.penates.diana.llm.TodoChangeSet
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.notes.ThoughtDocument
@@ -23,6 +24,7 @@ class NoteRepository(
     private val notesFile: File,
     private val thoughtMarkdownFile: File = defaultThoughtMarkdownFile(notesFile),
     private val thoughtOutlineFile: File = defaultThoughtOutlineFile(notesFile),
+    private val todoChangeSetFile: File = defaultTodoChangeSetFile(notesFile),
     private val tagCatalogRepository: TagCatalogRepository? = null,
 ) {
     companion object {
@@ -39,6 +41,12 @@ class NoteRepository(
             val parent = notesFile.absoluteFile.parentFile
                 ?: throw IllegalArgumentException("notesFile must have a parent directory")
             return File(parent, "thought_outline.json")
+        }
+
+        private fun defaultTodoChangeSetFile(notesFile: File): File {
+            val parent = notesFile.absoluteFile.parentFile
+                ?: throw IllegalArgumentException("notesFile must have a parent directory")
+            return File(parent, "todo_change_sets.jsonl")
         }
     }
     suspend fun saveNotes(notes: List<StructuredNote>): List<StructuredNote> {
@@ -62,13 +70,48 @@ class NoteRepository(
         return saved
     }
 
+    private suspend fun saveNotesWithChangeSet(
+        notes: List<StructuredNote>,
+        changeSet: TodoChangeSet,
+    ): List<StructuredNote> {
+        val saved = mutableListOf<StructuredNote>()
+        val collection = notesCollection()
+        val batch = firestore.batch()
+        for (note in notes) {
+            val (docRef, updated) = if (note is StructuredNote.ToDo) {
+                if (note.id.isBlank()) {
+                    val doc = collection.document()
+                    doc to note.copy(id = doc.id)
+                } else {
+                    collection.document(note.id) to note
+                }
+            } else {
+                collection.document() to note
+            }
+            batch.set(docRef, noteToMap(updated))
+            saved += updated
+        }
+        val resolvedChangeSet = normalizeChangeSet(changeSet)
+        batch.set(todoChangeSetsCollection().document(resolvedChangeSet.changeSetId), resolvedChangeSet)
+        batch.commit().await()
+        notesFile.writeText(saved.joinToString("\n") { toJson(it) })
+        writeTodoChangeSetLocal(resolvedChangeSet)
+        return saved
+    }
+
     suspend fun saveSummary(
         summary: MemoSummary,
         saveTodos: Boolean = true,
         saveAppointments: Boolean = true,
         saveThoughts: Boolean = true,
+        changeSet: TodoChangeSet? = null,
     ): MemoSummary {
-        val savedNotes = saveNotes(summaryToNotes(summary, saveTodos, saveAppointments, saveThoughts))
+        val notesToSave = summaryToNotes(summary, saveTodos, saveAppointments, saveThoughts)
+        val savedNotes = if (changeSet == null) {
+            saveNotes(notesToSave)
+        } else {
+            saveNotesWithChangeSet(notesToSave, changeSet)
+        }
         if (saveThoughts) {
             summary.thoughtDocument?.let { saveThoughtDocument(it) }
         }
@@ -222,6 +265,11 @@ class NoteRepository(
         .document(sessionId)
         .collection("notes")
 
+    private fun todoChangeSetsCollection() = firestore
+        .collection("sessions")
+        .document(sessionId)
+        .collection("todo_change_sets")
+
     private fun writeThoughtDocumentLocal(document: ThoughtDocument) {
         ensureParentExists(thoughtMarkdownFile)
         thoughtMarkdownFile.writeText(document.markdownBody)
@@ -272,6 +320,73 @@ class NoteRepository(
         if (parent != null && !parent.exists()) {
             parent.mkdirs()
         }
+    }
+
+    private fun normalizeChangeSet(changeSet: TodoChangeSet): TodoChangeSet {
+        val resolvedSessionId = if (changeSet.sessionId.isBlank()) sessionId else changeSet.sessionId
+        val resolvedChangeSetId = if (changeSet.changeSetId.isBlank()) {
+            java.util.UUID.randomUUID().toString()
+        } else {
+            changeSet.changeSetId
+        }
+        return if (resolvedSessionId == changeSet.sessionId && resolvedChangeSetId == changeSet.changeSetId) {
+            changeSet
+        } else {
+            changeSet.copy(
+                sessionId = resolvedSessionId,
+                changeSetId = resolvedChangeSetId,
+            )
+        }
+    }
+
+    private fun writeTodoChangeSetLocal(changeSet: TodoChangeSet) {
+        val json = todoChangeSetToJson(changeSet)
+        appendJsonLine(todoChangeSetFile, json)
+    }
+
+    private fun appendJsonLine(file: File, line: String) {
+        ensureParentExists(file)
+        if (file.exists() && file.length() > 0L) {
+            file.appendText("\n$line")
+        } else {
+            file.writeText(line)
+        }
+    }
+
+    private fun todoChangeSetToJson(changeSet: TodoChangeSet): String {
+        val obj = JSONObject()
+        obj.put("changeSetId", changeSet.changeSetId)
+        obj.put("sessionId", changeSet.sessionId)
+        obj.put("memoId", changeSet.memoId)
+        obj.put("timestamp", changeSet.timestamp)
+        obj.put("model", changeSet.model)
+        obj.put("promptVersion", changeSet.promptVersion)
+        val actions = JSONArray()
+        changeSet.actions.forEach { action ->
+            val actionObj = JSONObject()
+            actionObj.put("op", action.op)
+            actionObj.put(
+                "before",
+                action.before?.let { JSONObject(todoItemToMap(it)) } ?: JSONObject.NULL,
+            )
+            actionObj.put(
+                "after",
+                action.after?.let { JSONObject(todoItemToMap(it)) } ?: JSONObject.NULL,
+            )
+            actions.put(actionObj)
+        }
+        obj.put("actions", actions)
+        return obj.toString()
+    }
+
+    private fun todoItemToMap(item: TodoItem): Map<String, Any> = buildMap {
+        put("text", item.text)
+        put("status", item.status)
+        put("tagIds", item.tagIds)
+        if (item.tagLabels.isNotEmpty()) put("tagLabels", item.tagLabels)
+        if (item.dueDate.isNotBlank()) put("dueDate", item.dueDate)
+        if (item.eventDate.isNotBlank()) put("eventDate", item.eventDate)
+        if (item.id.isNotBlank()) put("id", item.id)
     }
 
     private fun outlineSectionToJson(section: ThoughtOutlineSection): JSONObject {
