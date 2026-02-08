@@ -4,6 +4,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import li.crescio.penates.diana.llm.MemoSummary
+import li.crescio.penates.diana.llm.TodoAction
 import li.crescio.penates.diana.llm.TodoChangeSet
 import li.crescio.penates.diana.llm.TodoDiff
 import li.crescio.penates.diana.llm.TodoItem
@@ -222,6 +223,30 @@ class NoteRepository(
         notesFile.writeText(updatedNotes.joinToString("\n") { toJson(it) })
         writeTodoChangeSetLocal(recordedChangeSet)
         return updatedNotes
+    }
+
+    suspend fun loadTodoChangeSets(): List<TodoChangeSet> {
+        val local = if (todoChangeSetFile.exists()) {
+            todoChangeSetFile.readLines().mapNotNull { parseTodoChangeSetJson(it) }
+        } else {
+            emptyList()
+        }
+        val remote = try {
+            todoChangeSetsCollection().get().await().documents.mapNotNull { doc ->
+                val data = doc.data ?: return@mapNotNull null
+                parseTodoChangeSetMap(data, doc.id)
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val combined = LinkedHashMap<String, TodoChangeSet>()
+        (local + remote).forEach { changeSet ->
+            val existing = combined[changeSet.changeSetId]
+            if (existing == null || changeSet.timestamp > existing.timestamp) {
+                combined[changeSet.changeSetId] = changeSet
+            }
+        }
+        return combined.values.sortedByDescending { it.timestamp }
     }
 
     suspend fun loadNotes(): List<StructuredNote> {
@@ -477,6 +502,110 @@ class NoteRepository(
         }
         obj.put("actions", actions)
         return obj.toString()
+    }
+
+    private fun parseTodoChangeSetJson(line: String): TodoChangeSet? {
+        return try {
+            val obj = JSONObject(line)
+            val changeSetId = obj.optString("changeSetId", "")
+            val sessionId = obj.optString("sessionId", "")
+            val memoId = obj.optString("memoId", "")
+            val timestamp = obj.optLong("timestamp", 0L)
+            val model = obj.optString("model", "")
+            val promptVersion = obj.optString("promptVersion", "")
+            val type = obj.optString("type", "apply")
+            val actionsArray = obj.optJSONArray("actions")
+            val actions = mutableListOf<TodoAction>()
+            if (actionsArray != null) {
+                for (idx in 0 until actionsArray.length()) {
+                    val actionObj = actionsArray.optJSONObject(idx) ?: continue
+                    val op = actionObj.optString("op", "")
+                    if (op.isBlank()) continue
+                    val before = actionObj.optJSONObject("before")?.let { parseTodoItemJson(it) }
+                    val after = actionObj.optJSONObject("after")?.let { parseTodoItemJson(it) }
+                    actions.add(TodoAction(op = op, before = before, after = after))
+                }
+            }
+            if (changeSetId.isBlank() || actions.isEmpty()) return null
+            TodoChangeSet(
+                changeSetId = changeSetId,
+                sessionId = sessionId,
+                memoId = memoId,
+                timestamp = timestamp,
+                model = model,
+                promptVersion = promptVersion,
+                actions = actions,
+                type = type.ifBlank { "apply" },
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseTodoChangeSetMap(data: Map<String, Any>, fallbackId: String): TodoChangeSet? {
+        val changeSetId = (data["changeSetId"] as? String).orEmpty().ifBlank { fallbackId }
+        if (changeSetId.isBlank()) return null
+        val sessionId = (data["sessionId"] as? String).orEmpty()
+        val memoId = (data["memoId"] as? String).orEmpty()
+        val timestamp = (data["timestamp"] as? Number)?.toLong() ?: 0L
+        val model = (data["model"] as? String).orEmpty()
+        val promptVersion = (data["promptVersion"] as? String).orEmpty()
+        val type = (data["type"] as? String).orEmpty().ifBlank { "apply" }
+        val rawActions = data["actions"] as? List<*> ?: emptyList<Any>()
+        val actions = rawActions.mapNotNull { entry ->
+            val actionMap = entry as? Map<*, *> ?: return@mapNotNull null
+            val op = (actionMap["op"] as? String).orEmpty()
+            if (op.isBlank()) return@mapNotNull null
+            val before = parseTodoItemMap(actionMap["before"])
+            val after = parseTodoItemMap(actionMap["after"])
+            TodoAction(op = op, before = before, after = after)
+        }
+        if (actions.isEmpty()) return null
+        return TodoChangeSet(
+            changeSetId = changeSetId,
+            sessionId = sessionId,
+            memoId = memoId,
+            timestamp = timestamp,
+            model = model,
+            promptVersion = promptVersion,
+            actions = actions,
+            type = type,
+        )
+    }
+
+    private fun parseTodoItemMap(value: Any?): TodoItem? {
+        val map = value as? Map<*, *> ?: return null
+        val text = (map["text"] as? String).orEmpty()
+        if (text.isBlank()) return null
+        val status = (map["status"] as? String).orEmpty()
+        val tagIds = (map["tagIds"] as? List<*>).toStringList()
+        val tagLabels = (map["tagLabels"] as? List<*>).toStringList()
+        val dueDate = (map["dueDate"] as? String).orEmpty()
+        val eventDate = (map["eventDate"] as? String).orEmpty()
+        val id = (map["id"] as? String).orEmpty()
+        return TodoItem(
+            text = text,
+            status = status,
+            tagIds = tagIds,
+            tagLabels = tagLabels,
+            dueDate = dueDate,
+            eventDate = eventDate,
+            id = id,
+        )
+    }
+
+    private fun parseTodoItemJson(obj: JSONObject): TodoItem? {
+        val text = obj.optString("text", "")
+        if (text.isBlank()) return null
+        return TodoItem(
+            text = text,
+            status = obj.optString("status", ""),
+            tagIds = obj.optJSONArray("tagIds").toStringList(),
+            tagLabels = obj.optJSONArray("tagLabels").toStringList(),
+            dueDate = obj.optString("dueDate", ""),
+            eventDate = obj.optString("eventDate", ""),
+            id = obj.optString("id", ""),
+        )
     }
 
     private fun invertTodoAction(action: li.crescio.penates.diana.llm.TodoAction): li.crescio.penates.diana.llm.TodoAction {
