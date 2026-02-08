@@ -111,6 +111,12 @@ def _document_payload(document: Any) -> tuple[str, DocumentData]:
     return str(doc_id), data
 
 
+def _as_mapping(value: Any) -> Mapping[str, Any] | None:
+    if isinstance(value, Mapping):
+        return value
+    return None
+
+
 def parse_remote_session(document: Any) -> Session | None:
     doc_id, data = _document_payload(document)
     name = str(data.get("name", "")).strip()
@@ -245,6 +251,25 @@ class TodoItem(StructuredNote):
     due_date: str = ""
     event_date: str = ""
     note_id: str = ""
+
+
+@dataclass(slots=True)
+class TodoAction:
+    op: str
+    before: TodoItem | None
+    after: TodoItem | None
+
+
+@dataclass(slots=True)
+class TodoChangeSet:
+    change_set_id: str
+    session_id: str
+    memo_id: str
+    timestamp: int
+    model: str
+    prompt_version: str
+    actions: list[TodoAction]
+    change_type: str = "apply"
 
 
 @dataclass(slots=True)
@@ -441,6 +466,64 @@ def parse_remote_note(document: Any, tag_context: TagMappingContext) -> Structur
     return None
 
 
+def _parse_todo_item(data: Mapping[str, Any] | None) -> TodoItem | None:
+    if not data:
+        return None
+    text = str(data.get("text", "")).strip()
+    if not text:
+        return None
+    status = str(data.get("status", "")).strip()
+    due_date = str(data.get("dueDate", "")).strip()
+    event_date = str(data.get("eventDate", "")).strip()
+    tag_ids = _as_string_sequence(data.get("tagIds"))
+    tag_labels = _as_string_sequence(data.get("tagLabels"))
+    note_id = str(data.get("id", "")).strip()
+    return TodoItem(
+        text=text,
+        status=status,
+        tag_ids=tag_ids,
+        tag_labels=tag_labels,
+        due_date=due_date,
+        event_date=event_date,
+        note_id=note_id,
+    )
+
+
+def parse_remote_todo_change_set(document: Any) -> TodoChangeSet | None:
+    change_set_id, data = _document_payload(document)
+    session_id = str(data.get("sessionId", "")).strip()
+    memo_id = str(data.get("memoId", "")).strip()
+    timestamp = _coerce_int(data.get("timestamp", 0))
+    model = str(data.get("model", "")).strip()
+    prompt_version = str(data.get("promptVersion", "")).strip()
+    change_type = str(data.get("type", "")).strip() or "apply"
+    raw_actions = data.get("actions")
+    actions: list[TodoAction] = []
+    if isinstance(raw_actions, Sequence):
+        for entry in raw_actions:
+            action_data = _as_mapping(entry)
+            if not action_data:
+                continue
+            op = str(action_data.get("op", "")).strip()
+            if not op:
+                continue
+            before = _parse_todo_item(_as_mapping(action_data.get("before")))
+            after = _parse_todo_item(_as_mapping(action_data.get("after")))
+            actions.append(TodoAction(op=op, before=before, after=after))
+    if not actions:
+        return None
+    return TodoChangeSet(
+        change_set_id=change_set_id,
+        session_id=session_id,
+        memo_id=memo_id,
+        timestamp=timestamp,
+        model=model,
+        prompt_version=prompt_version,
+        actions=actions,
+        change_type=change_type,
+    )
+
+
 def structured_note_to_map(note: StructuredNoteType) -> dict[str, Any]:
     if isinstance(note, TodoItem):
         payload: dict[str, Any] = {
@@ -548,8 +631,11 @@ __all__ = [
     "ThoughtDocument",
     "ThoughtOutline",
     "ThoughtOutlineSection",
+    "TodoAction",
+    "TodoChangeSet",
     "TodoItem",
     "parse_remote_note",
+    "parse_remote_todo_change_set",
     "parse_remote_session",
     "resolve_tag_data",
     "structured_note_to_map",

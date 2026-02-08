@@ -82,6 +82,7 @@ import li.crescio.penates.diana.notes.Memo
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.notes.ThoughtDocument
 import li.crescio.penates.diana.persistence.NoteRepository
+import li.crescio.penates.diana.persistence.TodoChangeSetMode
 import li.crescio.penates.diana.player.AndroidPlayer
 import li.crescio.penates.diana.player.Player
 import li.crescio.penates.diana.ui.*
@@ -1030,6 +1031,7 @@ fun DianaApp(
     var appointments by remember(session.id) { mutableStateOf(listOf<Appointment>()) }
     var thoughtNotes by remember(session.id) { mutableStateOf(listOf<StructuredNote>()) }
     var thoughtDocument by remember(session.id) { mutableStateOf<ThoughtDocument?>(null) }
+    var todoChangeSets by remember(session.id) { mutableStateOf(listOf<TodoChangeSetDisplay>()) }
     var pendingMoveRequest by remember(session.id) { mutableStateOf<SessionItemMoveRequest?>(null) }
     val scope = rememberCoroutineScope()
     val player: Player = remember { AndroidPlayer() }
@@ -1159,6 +1161,25 @@ fun DianaApp(
         scope.launch { processor.initialize(summary) }
     }
 
+    suspend fun refreshTodoChangeSets() {
+        val changeSets = repository.loadTodoChangeSets()
+        val memos = memoRepository.loadMemos()
+        val memoById = memos.associateBy { it.createdAt.toString() }
+        todoChangeSets = changeSets.map { changeSet ->
+            val memo = memoById[changeSet.memoId]
+            val excerpt = memo?.text
+                ?.replace("\n", " ")
+                ?.trim()
+                ?.take(120)
+                .orEmpty()
+            TodoChangeSetDisplay(
+                changeSet = changeSet,
+                memoTimestamp = memo?.createdAt,
+                memoExcerpt = excerpt,
+            )
+        }
+    }
+
     LaunchedEffect(logger) {
         logger.logFlow.collect { addLog(it) }
     }
@@ -1186,6 +1207,7 @@ fun DianaApp(
         thoughtNotes = memoNotes + freeNotes
         onSessionTodosChanged(session.id, updatedTodos)
         syncProcessor()
+        refreshTodoChangeSets()
     }
 
     fun processMemo(memo: Memo) {
@@ -1238,6 +1260,7 @@ fun DianaApp(
                     thoughtDocument = saved.thoughtDocument ?: thoughtDocument
                 }
                 processor.initialize(saved)
+                refreshTodoChangeSets()
                 screen = Screen.List
             } catch (e: IOException) {
                 Log.e("DianaApp", "Error processing memo: ${e.message}", e)
@@ -1395,6 +1418,7 @@ fun DianaApp(
                     currentTagCatalog,
                     locale,
                     logs,
+                    todoChangeSets,
                     processTodos,
                     processAppointments,
                     processThoughts,
@@ -1420,6 +1444,53 @@ fun DianaApp(
                             repository.deleteTodoItem(item.id)
                             onSessionTodosChanged(session.id, updatedTodos)
                             syncProcessor()
+                        }
+                    },
+                    onUndoTodoChangeSet = { changeSet ->
+                        scope.launch {
+                            val updatedNotes = repository.applyTodoChangeSet(
+                                changeSet,
+                                TodoChangeSetMode.UNDO,
+                            )
+                            val updatedTodos = updatedNotes.filterIsInstance<StructuredNote.ToDo>().map {
+                                TodoItem(
+                                    text = it.text,
+                                    status = it.status,
+                                    tagIds = it.tagIds,
+                                    tagLabels = it.tagLabels,
+                                    dueDate = it.dueDate,
+                                    eventDate = it.eventDate,
+                                    id = it.id,
+                                )
+                            }
+                            todoItems = updatedTodos
+                            onSessionTodosChanged(session.id, updatedTodos)
+                            syncProcessor()
+                            refreshTodoChangeSets()
+                        }
+                    },
+                    onUndoTodoAction = { changeSet, action ->
+                        scope.launch {
+                            val singleActionChangeSet = changeSet.copy(actions = listOf(action))
+                            val updatedNotes = repository.applyTodoChangeSet(
+                                singleActionChangeSet,
+                                TodoChangeSetMode.UNDO,
+                            )
+                            val updatedTodos = updatedNotes.filterIsInstance<StructuredNote.ToDo>().map {
+                                TodoItem(
+                                    text = it.text,
+                                    status = it.status,
+                                    tagIds = it.tagIds,
+                                    tagLabels = it.tagLabels,
+                                    dueDate = it.dueDate,
+                                    eventDate = it.eventDate,
+                                    id = it.id,
+                                )
+                            }
+                            todoItems = updatedTodos
+                            onSessionTodosChanged(session.id, updatedTodos)
+                            syncProcessor()
+                            refreshTodoChangeSets()
                         }
                     },
                     onAppointmentDelete = { appt ->

@@ -56,6 +56,14 @@
     <string name="todo_status_done">Done</string>
     <string name="todo_status_cancelled">Cancelled</string>
     <string name="todo_status_not_required">Not required</string>
+    <string name="todo_change_history">Todo change history</string>
+    <string name="todo_change_history_empty">No todo change sets recorded yet.</string>
+    <string name="todo_change_history_undo_set">Undo change set</string>
+    <string name="todo_change_history_action_label">Action: %1$s</string>
+    <string name="todo_change_history_before">Before</string>
+    <string name="todo_change_history_after">After</string>
+    <string name="todo_change_history_undo_action">Undo action</string>
+    <string name="todo_change_history_empty_state">None</string>
     <string name="delete_appointment_title">Delete appointment</string>
     <string name="delete_appointment_message">Are you sure you want to delete this appointment?</string>
     <string name="process_todo">Process to-dos</string>

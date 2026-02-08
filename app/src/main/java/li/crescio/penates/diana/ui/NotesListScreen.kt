@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import li.crescio.penates.diana.R
 import li.crescio.penates.diana.llm.Appointment
+import li.crescio.penates.diana.llm.TodoAction
+import li.crescio.penates.diana.llm.TodoChangeSet
 import li.crescio.penates.diana.llm.TodoItem
 import li.crescio.penates.diana.notes.StructuredNote
 import li.crescio.penates.diana.notes.ThoughtDocument
@@ -43,6 +45,12 @@ import java.time.format.FormatStyle
 import java.time.ZoneId
 import java.util.LinkedHashSet
 import java.util.Locale
+
+data class TodoChangeSetDisplay(
+    val changeSet: TodoChangeSet,
+    val memoTimestamp: Long?,
+    val memoExcerpt: String,
+)
 
 private fun parseDate(dateString: String): LocalDate? {
     if (dateString.isBlank()) return null
@@ -415,6 +423,7 @@ fun NotesListScreen(
     tagCatalog: TagCatalog? = null,
     locale: Locale = Locale.getDefault(),
     logs: List<String>,
+    todoChangeSets: List<TodoChangeSetDisplay>,
     showTodos: Boolean,
     showAppointments: Boolean,
     showThoughts: Boolean,
@@ -423,6 +432,8 @@ fun NotesListScreen(
     onTodoCheckedChange: (TodoItem, Boolean) -> Unit,
     onTodoEdit: (TodoItem) -> Unit,
     onTodoDelete: (TodoItem) -> Unit,
+    onUndoTodoChangeSet: (TodoChangeSet) -> Unit,
+    onUndoTodoAction: (TodoChangeSet, TodoAction) -> Unit,
     onAppointmentDelete: (Appointment) -> Unit,
     onTodoMove: (TodoItem) -> Unit,
     onAppointmentMove: (Appointment) -> Unit,
@@ -695,9 +706,167 @@ fun NotesListScreen(
                     )
                 }
             }
+            if (showTodos) {
+                item {
+                    TodoChangeSetSection(
+                        changeSets = todoChangeSets,
+                        tagCatalog = tagCatalog,
+                        locale = locale,
+                        showTags = showTags,
+                        onUndoChangeSet = onUndoTodoChangeSet,
+                        onUndoAction = onUndoTodoAction,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                }
+            }
         }
 
         LogSection(logs)
+    }
+}
+
+@Composable
+private fun TodoChangeSetSection(
+    changeSets: List<TodoChangeSetDisplay>,
+    tagCatalog: TagCatalog?,
+    locale: Locale,
+    showTags: Boolean,
+    onUndoChangeSet: (TodoChangeSet) -> Unit,
+    onUndoAction: (TodoChangeSet, TodoAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.todo_change_history))
+        if (changeSets.isEmpty()) {
+            Text(
+                text = stringResource(R.string.todo_change_history_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            return
+        }
+        val timeFormatter = remember { DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM) }
+        changeSets.forEach { entry ->
+            val timestamp = entry.memoTimestamp ?: entry.changeSet.timestamp
+            val formatted = runCatching {
+                Instant.ofEpochMilli(timestamp)
+                    .atZone(ZoneId.systemDefault())
+                    .format(timeFormatter)
+            }.getOrElse { timestamp.toString() }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = formatted,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            if (entry.memoExcerpt.isNotBlank()) {
+                                Text(
+                                    text = entry.memoExcerpt,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        TextButton(onClick = { onUndoChangeSet(entry.changeSet) }) {
+                            Text(stringResource(R.string.todo_change_history_undo_set))
+                        }
+                    }
+                    entry.changeSet.actions.forEach { action ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.todo_change_history_action_label,
+                                action.op.replaceFirstChar {
+                                    if (it.isLowerCase()) it.titlecase(locale) else it.toString()
+                                }
+                            ),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        TodoActionSnapshot(
+                            label = stringResource(R.string.todo_change_history_before),
+                            item = action.before,
+                            tagCatalog = tagCatalog,
+                            locale = locale,
+                            showTags = showTags,
+                        )
+                        TodoActionSnapshot(
+                            label = stringResource(R.string.todo_change_history_after),
+                            item = action.after,
+                            tagCatalog = tagCatalog,
+                            locale = locale,
+                            showTags = showTags,
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            OutlinedButton(onClick = { onUndoAction(entry.changeSet, action) }) {
+                                Text(stringResource(R.string.todo_change_history_undo_action))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TodoActionSnapshot(
+    label: String,
+    item: TodoItem?,
+    tagCatalog: TagCatalog?,
+    locale: Locale,
+    showTags: Boolean,
+) {
+    Column(modifier = Modifier.padding(top = 4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (item == null) {
+            Text(
+                text = stringResource(R.string.todo_change_history_empty_state),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return
+        }
+        Text(text = item.text, style = MaterialTheme.typography.bodyMedium)
+        val statusLabel = todoStatusLabel(item.status)
+        if (statusLabel.isNotBlank()) {
+            Text(
+                text = stringResource(R.string.todo_status_display, statusLabel),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        val tags = remember(item, tagCatalog, locale) { item.resolvedTags(tagCatalog, locale) }
+        if (showTags && tags.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                tags.forEach { tag ->
+                    AssistChip(onClick = {}, label = { Text(tag.label) })
+                }
+            }
+        }
     }
 }
 
@@ -921,4 +1090,3 @@ private fun parseTagInput(value: String): List<String> {
         .filter { it.isNotEmpty() }
         .distinct()
 }
-
